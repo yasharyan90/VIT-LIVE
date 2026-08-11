@@ -1,0 +1,49 @@
+flowchart TB
+    subgraph Clients
+        Mobile["Mobile App (Flutter)\nREST + WebSocket"]
+        Admin["Admin Dashboard (React)\nREST"]
+    end
+
+    subgraph Edge
+        Nginx["Nginx\nTLS + Load Balancer"]
+    end
+
+    subgraph Backend["Backend (Go + Fiber) - Horizontally Scaled"]
+        F1["Fiber Instance 1\nREST + WS Hub"]
+        F2["Fiber Instance 2\nREST + WS Hub"]
+        FN["Fiber Instance N\nREST + WS Hub"]
+    end
+
+    subgraph Data
+        Redis["Redis\nPub/Sub + Cache + Rate Limit"]
+        PG["PostgreSQL\nUsers, Announcements, Events,\nPolls, Lost&Found, Audit"]
+    end
+
+    subgraph External
+        FCM["Firebase Cloud Messaging\n(background push)"]
+        Mail["Email Service\n(OTP delivery)"]
+        Storage["Object Storage\n(images)"]
+    end
+
+    Mobile -- "REST + WSS" --> Nginx
+    Admin -- "REST" --> Nginx
+    Nginx --> F1
+    Nginx --> F2
+    Nginx --> FN
+
+    F1 <--> Redis
+    F2 <--> Redis
+    FN <--> Redis
+
+    F1 --> PG
+    F2 --> PG
+    FN --> PG
+
+    F1 -.async.-> FCM
+    F1 -.async.-> Mail
+    F1 -.async.-> Storage
+
+    FCM -.push.-> Mobile
+
+    classDef critical fill:#DC2626,color:#fff,stroke:#7f1d1d,stroke-width:2px;
+    class Redis critical

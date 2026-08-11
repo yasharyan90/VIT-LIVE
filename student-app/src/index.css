@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+@theme {
+  /* Minimal black theme — the accent is white; red stays reserved for emergencies. */
+  --color-primary: #fafafa;
+  --color-primary-light: #d4d4d4;
+  --color-emergency: #e5484d;
+  --color-emergency-bg: #1d0f10;
+  --color-success: #3ecf8e;
+  --color-warning: #f5b944;
+  --color-ink: #f2f2f2;
+  --color-muted: #8a8a8a;
+  --color-soft: #1a1a1a;
+  --color-surface: #0d0d0d;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+
+  --animate-slide-fade: slide-fade 200ms ease-out both;
+  --animate-fade-in: fade-in 150ms ease-out both;
+  --animate-toast-in: toast-in 200ms ease-out both;
+}
+
+@keyframes slide-fade {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: #000000;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  color-scheme: dark;
+}
+
+::selection {
+  background: rgba(255, 255, 255, 0.85);
+  color: #000;
+}

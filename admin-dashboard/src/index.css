@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+@theme {
+  /* Minimal black theme — white is the accent; red stays reserved for emergencies. */
+  --color-primary: #fafafa;
+  --color-primary-light: #a3a3a3;
+  --color-emergency: #e5484d;
+  --color-emergency-bg: #1d0f10;
+  --color-success: #3ecf8e;
+  --color-warning: #f5b944;
+  --color-neutral-900: #f2f2f2;
+  --color-neutral-500: #8a8a8a;
+  --color-neutral-100: #1a1a1a;
+  --color-surface: #101010;
+  --font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+body {
+  background-color: #050505;
+  color: var(--color-neutral-900);
+  -webkit-font-smoothing: antialiased;
+  color-scheme: dark;
+}
+
+::selection {
+  background: rgba(255, 255, 255, 0.85);
+  color: #000;
+}
