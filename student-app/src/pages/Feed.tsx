@@ -2,14 +2,99 @@
 // pagination via `before`, live WS prepend with slide-down + fade.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { api } from '../lib/api'
 import { bumpLastSeen, ws } from '../lib/ws'
 import { relTime } from '../lib/time'
-import type { Announcement, MessMenu } from '../lib/types'
-import { EmptyState, PageLoader, PriorityBadge, Spinner } from '../components/ui'
+import type { Announcement, ClubPost, MessMenu } from '../lib/types'
+import { EmptyState, PageLoader, PriorityBadge, Spinner, SubTabs } from '../components/ui'
+import { ClubPostCard } from '../components/ClubPostCard'
 import { MotionItem, MotionList, spring } from '../components/motion'
 import { RefreshIcon } from '../components/Icons'
+
+/* ---------- Club social feed (posts from clubs you follow) ---------- */
+
+function ClubsFeed() {
+  const [posts, setPosts] = useState<ClubPost[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    api<{ items: ClubPost[] }>('/feed/clubs')
+      .then((data) => {
+        if (!cancelled) setPosts(data.items)
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load club feed')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Live: new posts from followed clubs, like tallies, deletions.
+  useEffect(() => {
+    const offs = [
+      ws.on('clubpost.new', (env) => {
+        const p = env.payload as ClubPost
+        if (!p || !p.id) return
+        setPosts((prev) => (prev.some((x) => x.id === p.id) ? prev : [p, ...prev]))
+      }),
+      ws.on('clubpost.like', (env) => {
+        const upd = env.payload as { id: string; like_count: number }
+        setPosts((prev) => prev.map((p) => (p.id === upd.id ? { ...p, like_count: upd.like_count } : p)))
+      }),
+      ws.on('clubpost.deleted', (env) => {
+        const upd = env.payload as { id: string }
+        setPosts((prev) => prev.filter((p) => p.id !== upd.id))
+      }),
+    ]
+    return () => offs.forEach((off) => off())
+  }, [])
+
+  const updatePost = (p: ClubPost) =>
+    setPosts((prev) => prev.map((x) => (x.id === p.id ? p : x)))
+
+  if (loading) return <PageLoader />
+  if (error) {
+    return (
+      <p className="mt-3 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm font-medium text-warning" role="alert">
+        {error}
+      </p>
+    )
+  }
+  if (posts.length === 0) {
+    return (
+      <div>
+        <EmptyState
+          icon="🎭"
+          title="Your clubs' updates live here"
+          subtitle="Follow clubs to see their announcements, banner reveals and news the moment they drop."
+        />
+        <Link
+          to="/profile"
+          className="mx-auto flex min-h-11 w-fit items-center rounded-xl bg-primary px-5 text-sm font-semibold text-black shadow-sm"
+        >
+          Find clubs to follow
+        </Link>
+      </div>
+    )
+  }
+  return (
+    <MotionList className="mt-3 space-y-3">
+      {posts.map((p) => (
+        <MotionItem key={p.id}>
+          <ClubPostCard post={p} onChange={updatePost} />
+        </MotionItem>
+      ))}
+    </MotionList>
+  )
+}
 
 const MEAL_ICONS: Record<MessMenu['meal'], string> = {
   breakfast: '☕', lunch: '🍛', snacks: '🍪', dinner: '🍽',
@@ -82,6 +167,7 @@ function MessMenuCard() {
 const PAGE_SIZE = 20
 
 export function FeedPage() {
+  const [tab, setTab] = useState<'campus' | 'clubs'>('campus')
   const [items, setItems] = useState<Announcement[]>([])
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -222,6 +308,21 @@ export function FeedPage() {
 
   return (
     <div className="px-4 py-4">
+      <div className="mb-3">
+        <SubTabs
+          tabs={[
+            { value: 'campus', label: 'Campus' },
+            { value: 'clubs', label: 'My Clubs' },
+          ]}
+          active={tab}
+          onChange={setTab}
+        />
+      </div>
+
+      {tab === 'clubs' ? (
+        <ClubsFeed />
+      ) : (
+        <>
       <MessMenuCard />
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-lg font-bold text-ink">Campus Feed</h2>
@@ -323,6 +424,8 @@ export function FeedPage() {
         >
           {loadingMore ? <Spinner className="h-5 w-5" /> : 'Load more'}
         </button>
+      )}
+        </>
       )}
     </div>
   )

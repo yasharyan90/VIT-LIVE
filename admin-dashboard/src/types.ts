@@ -70,6 +70,19 @@ export interface AppEvent {
   created_at: string
 }
 
+export interface ClubPost {
+  id: string
+  club_id: string
+  club_name: string
+  kind: 'announcement' | 'banner' | 'news'
+  body: string
+  image_url: string | null
+  author_name: string
+  created_at: string
+  like_count: number
+  my_like: boolean
+}
+
 export interface Attendee {
   full_name: string
   college_email: string

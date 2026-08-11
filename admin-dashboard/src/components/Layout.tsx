@@ -11,6 +11,7 @@ interface NavItem {
   to: string
   label: string
   superAdminOnly?: boolean
+  roles?: string[] // visible only to these roles (overrides superAdminOnly)
   emergency?: boolean
 }
 
@@ -19,7 +20,8 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/announcements', label: 'Announcements' },
   { to: '/emergency', label: '⚠ Emergency', superAdminOnly: true, emergency: true },
   { to: '/events', label: 'Events' },
-  { to: '/checkin', label: 'Check-in' },
+  { to: '/club-feed', label: 'Club Feed', roles: ['club_admin', 'super_admin'] },
+  { to: '/checkin', label: 'Check-in', roles: ['club_admin', 'super_admin'] },
   { to: '/academic', label: 'Academic Calendar', superAdminOnly: true },
   { to: '/polls', label: 'Polls' },
   { to: '/lostfound', label: 'Lost & Found' },
@@ -65,7 +67,9 @@ export default function Layout() {
           <div className="text-xs font-medium uppercase tracking-widest text-white/40">Admin</div>
         </div>
         <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
-          {NAV_ITEMS.filter((item) => !item.superAdminOnly || isSuperAdmin).map((item) => (
+          {NAV_ITEMS.filter((item) =>
+            item.roles ? !!user && item.roles.includes(user.role) : !item.superAdminOnly || isSuperAdmin,
+          ).map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

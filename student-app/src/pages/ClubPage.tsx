@@ -8,8 +8,9 @@ import { api } from '../lib/api'
 import { ws } from '../lib/ws'
 import { relTime, formatEventTime } from '../lib/time'
 import { useToast } from '../lib/toast'
-import type { Announcement, AppEvent, Club } from '../lib/types'
+import type { Announcement, AppEvent, Club, ClubPost } from '../lib/types'
 import { EmptyState, PageLoader } from '../components/ui'
+import { ClubPostCard } from '../components/ClubPostCard'
 import { MotionItem, MotionList, spring } from '../components/motion'
 import { BackIcon } from '../components/Icons'
 
@@ -18,6 +19,7 @@ export function ClubPage() {
   const navigate = useNavigate()
   const toast = useToast()
   const [club, setClub] = useState<Club | null>(null)
+  const [posts, setPosts] = useState<ClubPost[]>([])
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [events, setEvents] = useState<AppEvent[]>([])
   const [loading, setLoading] = useState(true)
@@ -26,12 +28,16 @@ export function ClubPage() {
   useEffect(() => {
     if (!id) return
     let cancelled = false
-    api<{ club: Club; announcements: Announcement[]; events: AppEvent[] }>(`/clubs/${id}`)
-      .then((data) => {
+    Promise.all([
+      api<{ club: Club; announcements: Announcement[]; events: AppEvent[] }>(`/clubs/${id}`),
+      api<{ items: ClubPost[] }>(`/clubs/${id}/posts`),
+    ])
+      .then(([data, postData]) => {
         if (cancelled) return
         setClub(data.club)
         setAnnouncements(data.announcements)
         setEvents(data.events)
+        setPosts(postData.items)
       })
       .catch(() => {
         if (!cancelled) setClub(null)
@@ -42,6 +48,26 @@ export function ClubPage() {
     return () => {
       cancelled = true
     }
+  }, [id])
+
+  // Live timeline: new posts, like tallies, deletions for THIS club.
+  useEffect(() => {
+    const offs = [
+      ws.on('clubpost.new', (env) => {
+        const p = env.payload as ClubPost
+        if (!p || p.club_id !== id) return
+        setPosts((prev) => (prev.some((x) => x.id === p.id) ? prev : [p, ...prev]))
+      }),
+      ws.on('clubpost.like', (env) => {
+        const upd = env.payload as { id: string; like_count: number }
+        setPosts((prev) => prev.map((p) => (p.id === upd.id ? { ...p, like_count: upd.like_count } : p)))
+      }),
+      ws.on('clubpost.deleted', (env) => {
+        const upd = env.payload as { id: string }
+        setPosts((prev) => prev.filter((p) => p.id !== upd.id))
+      }),
+    ]
+    return () => offs.forEach((off) => off())
   }, [id])
 
   const toggleFollow = async () => {
@@ -116,6 +142,25 @@ export function ClubPage() {
             </div>
             {club.description && <p className="mt-3 text-sm leading-relaxed text-ink/75">{club.description}</p>}
           </motion.section>
+
+          <section className="mt-5" aria-label="Club timeline">
+            <h3 className="mb-2 text-sm font-bold uppercase tracking-wide text-muted">Timeline</h3>
+            {posts.length === 0 ? (
+              <p className="px-1 text-sm text-muted">No posts yet — updates will appear here.</p>
+            ) : (
+              <MotionList className="space-y-3">
+                {posts.map((p) => (
+                  <MotionItem key={p.id}>
+                    <ClubPostCard
+                      post={p}
+                      linkClub={false}
+                      onChange={(next) => setPosts((prev) => prev.map((x) => (x.id === next.id ? next : x)))}
+                    />
+                  </MotionItem>
+                ))}
+              </MotionList>
+            )}
+          </section>
 
           <section className="mt-5" aria-label="Upcoming club events">
             <h3 className="mb-2 text-sm font-bold uppercase tracking-wide text-muted">Upcoming events</h3>

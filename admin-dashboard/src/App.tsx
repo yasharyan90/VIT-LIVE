@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard'
 import Announcements from './pages/Announcements'
 import Emergency from './pages/Emergency'
 import Events from './pages/Events'
+import ClubFeed from './pages/ClubFeed'
 import CheckIn from './pages/CheckIn'
 import Academic from './pages/Academic'
 import Polls from './pages/Polls'
@@ -60,6 +61,7 @@ export default function App() {
                 }
               />
               <Route path="/events" element={<Events />} />
+              <Route path="/club-feed" element={<ClubFeed />} />
               <Route path="/checkin" element={<CheckIn />} />
               <Route
                 path="/academic"

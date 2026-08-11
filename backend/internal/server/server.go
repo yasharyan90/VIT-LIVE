@@ -86,7 +86,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, rdb *redis.Client) (*Server, er
 	lfH := &lostfound.Handler{DB: pool, RDB: rdb, Audit: auditor, Store: store}
 	evH := &events.Handler{DB: pool, RDB: rdb, Audit: auditor, FCM: fcm, Store: store}
 	pollH := &polls.Handler{DB: pool, RDB: rdb, Audit: auditor, HMACSecret: cfg.VoteHMACSecret}
-	clubH := &clubs.Handler{DB: pool, RDB: rdb, Audit: auditor}
+	clubH := &clubs.Handler{DB: pool, RDB: rdb, Audit: auditor, Store: store}
 	opsH := &adminops.Handler{DB: pool, RDB: rdb, Audit: auditor}
 	acadH := &academics.Handler{DB: pool, Audit: auditor}
 	messH := &mess.Handler{DB: pool, Audit: auditor}
@@ -166,6 +166,9 @@ func New(cfg *config.Config, pool *pgxpool.Pool, rdb *redis.Client) (*Server, er
 	api.Get("/clubs/:id", jwtMW, clubH.Get)
 	api.Post("/clubs/:id/follow", jwtMW, clubH.Follow)
 	api.Post("/clubs/:id/unfollow", jwtMW, clubH.Unfollow)
+	api.Get("/clubs/:id/posts", jwtMW, clubH.ListPosts)
+	api.Get("/feed/clubs", jwtMW, clubH.FollowedFeed)
+	api.Post("/club-posts/:id/like", jwtMW, clubH.LikePost)
 
 	api.Get("/academic-events", jwtMW, acadH.List)
 	api.Get("/mess-menu", jwtMW, messH.Get)
@@ -197,6 +200,9 @@ func New(cfg *config.Config, pool *pgxpool.Pool, rdb *redis.Client) (*Server, er
 	clubOrSuper := auth.RequireRole("club_admin", "super_admin")
 	admin.Post("/tickets/checkin", clubOrSuper, tickH.Checkin)
 	admin.Get("/events/:id/attendees", clubOrSuper, tickH.Attendees)
+	admin.Post("/club-posts", clubOrSuper, clubH.CreatePost)
+	admin.Get("/club-posts", clubOrSuper, clubH.AdminListPosts)
+	admin.Delete("/club-posts/:id", clubOrSuper, clubH.DeletePost)
 	admin.Get("/audit-logs", superOnly, auditor.List)
 	admin.Post("/academic-events", superOnly, acadH.Create)
 	admin.Delete("/academic-events/:id", superOnly, acadH.Delete)

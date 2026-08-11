@@ -400,6 +400,81 @@ func TestAPI(t *testing.T) {
 		}
 	})
 
+	t.Run("club social feed: post, follow-feed, like, scoped delete", func(t *testing.T) {
+		status, resp := e.call(t, "POST", "/api/v1/admin/clubs", adminToken, map[string]any{
+			"name": "Feed Club", "description": "posts things",
+		})
+		if status != 201 {
+			t.Fatalf("create club: %d", status)
+		}
+		clubID := resp["club"].(map[string]any)["id"].(string)
+		e.signupStudent(t, "feedclubadmin@vitstudent.ac.in")
+		e.call(t, "PATCH", "/api/v1/admin/clubs/"+clubID+"/admin", adminToken, map[string]any{
+			"email": "feedclubadmin@vitstudent.ac.in",
+		})
+		_, login := e.call(t, "POST", "/api/v1/auth/login", "", map[string]any{
+			"college_email": "feedclubadmin@vitstudent.ac.in", "password": "hunter2secret",
+		})
+		clubToken := login["access_token"].(string)
+
+		// Club account posts a banner reveal (multipart; club_id is implicit).
+		var form bytes.Buffer
+		w := multipart.NewWriter(&form)
+		w.WriteField("kind", "banner")
+		w.WriteField("body", "Fest banner drops tomorrow 🎬")
+		w.Close()
+		req, _ := http.NewRequest("POST", "/api/v1/admin/club-posts", &form)
+		req.Header.Set("Content-Type", w.FormDataContentType())
+		req.Header.Set("Authorization", "Bearer "+clubToken)
+		httpResp, err := e.srv.App.Test(req, 30_000)
+		if err != nil || httpResp.StatusCode != 201 {
+			t.Fatalf("club post: %v status %d", err, httpResp.StatusCode)
+		}
+		var postResp map[string]any
+		json.NewDecoder(httpResp.Body).Decode(&postResp)
+		httpResp.Body.Close()
+		post := postResp["post"].(map[string]any)
+		postID := post["id"].(string)
+		if post["club_id"] != clubID || post["kind"] != "banner" {
+			t.Fatalf("post not scoped to own club: %v", post)
+		}
+
+		// Students can't post to club feeds.
+		if status, _ := e.call(t, "POST", "/api/v1/admin/club-posts", studentToken, map[string]any{}); status != 403 {
+			t.Fatalf("student club post: expected 403, got %d", status)
+		}
+
+		// Follower feed: empty before following, contains the post after.
+		_, feed := e.call(t, "GET", "/api/v1/feed/clubs", studentToken, nil)
+		for _, it := range feed["items"].([]any) {
+			if it.(map[string]any)["id"] == postID {
+				t.Fatal("post visible in follower feed before following")
+			}
+		}
+		e.call(t, "POST", "/api/v1/clubs/"+clubID+"/follow", studentToken, map[string]any{})
+		_, feed = e.call(t, "GET", "/api/v1/feed/clubs", studentToken, nil)
+		found := false
+		for _, it := range feed["items"].([]any) {
+			if it.(map[string]any)["id"] == postID {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatal("post missing from follower feed after following")
+		}
+
+		// Like toggles.
+		status, like := e.call(t, "POST", "/api/v1/club-posts/"+postID+"/like", studentToken, nil)
+		if status != 200 || like["like_count"].(float64) != 1 || like["my_like"] != true {
+			t.Fatalf("like: %d (%v)", status, like)
+		}
+
+		// Only the owning club (or super admin) deletes.
+		if status, _ := e.call(t, "DELETE", "/api/v1/admin/club-posts/"+postID, clubToken, nil); status != 200 {
+			t.Fatalf("own club delete: %d", status)
+		}
+	})
+
 	t.Run("reactions toggle", func(t *testing.T) {
 		status, resp := e.call(t, "POST", "/api/v1/admin/announcements", adminToken, map[string]any{
 			"title": "React to me", "body": "👍",

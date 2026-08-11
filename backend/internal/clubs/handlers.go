@@ -9,12 +9,14 @@ import (
 
 	"vitlive/internal/audit"
 	"vitlive/internal/models"
+	"vitlive/internal/storage"
 )
 
 type Handler struct {
 	DB    *pgxpool.Pool
 	RDB   *redis.Client
 	Audit *audit.Logger
+	Store storage.Store
 }
 
 func errJSON(c *fiber.Ctx, status int, msg string) error {

@@ -209,3 +209,24 @@ checked_in_at, event_title, venue, start_time, attendee_name}`. The QR encodes
 
 Env: `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` — unset means mock gateway
 (instant success) for local dev.
+
+## Club social feed (Aug 2026)
+
+Clubs have a public social timeline (announcements / banner reveals / news)
+managed by the club account, followed by students.
+
+| Method & path | Who | Notes |
+|---|---|---|
+| `POST /admin/club-posts` | club_admin / super_admin | Multipart: `kind` (announcement\|banner\|news), `body`, `image?`, `club_id` (super admins only — club accounts post to their own club). Text or image required. |
+| `GET /admin/club-posts[?club_id=]` | club_admin / super_admin | Manage view → `{club:{id,name}, items}` |
+| `DELETE /admin/club-posts/:id` | owning club account / super_admin | Other clubs get 403. |
+| `GET /clubs/:id/posts` | student+ | A club's public timeline. |
+| `GET /feed/clubs` | student+ | Aggregated feed of posts from every club the caller follows. |
+| `POST /club-posts/:id/like` | student+ | Toggle like → `{like_count, my_like}` |
+
+ClubPost: `{id, club_id, club_name, kind, body, image_url, author_name,
+created_at, like_count, my_like}`.
+
+WS envelopes on topic `club:<id>` (followers auto-subscribed):
+`clubpost.new` (ClubPost), `clubpost.like` (`{id, like_count}`),
+`clubpost.deleted` (`{id}`).

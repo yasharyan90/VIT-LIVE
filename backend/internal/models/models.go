@@ -135,6 +135,19 @@ type MessMenu struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+type ClubPost struct {
+	ID         string    `json:"id"`
+	ClubID     string    `json:"club_id"`
+	ClubName   string    `json:"club_name"`
+	Kind       string    `json:"kind"` // announcement | banner | news
+	Body       string    `json:"body"`
+	ImageURL   *string   `json:"image_url"`
+	AuthorName string    `json:"author_name"`
+	CreatedAt  time.Time `json:"created_at"`
+	LikeCount  int       `json:"like_count"`
+	MyLike     bool      `json:"my_like"`
+}
+
 type AuditLog struct {
 	ID        string         `json:"id"`
 	ActorName string         `json:"actor_name"`

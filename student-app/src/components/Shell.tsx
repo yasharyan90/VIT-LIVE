@@ -9,7 +9,7 @@ import { bumpLastSeen, getLastSeen, ws } from '../lib/ws'
 import { getNotifPrefs } from '../lib/prefs'
 import { registerPush } from '../lib/pwa'
 import { useToast } from '../lib/toast'
-import type { Announcement, AppEvent, LostFoundItem, Poll } from '../lib/types'
+import type { Announcement, AppEvent, ClubPost, LostFoundItem, Poll } from '../lib/types'
 import { EmergencyOverlay } from './EmergencyOverlay'
 import { spring } from './motion'
 import { CalendarIcon, ChartIcon, HomeIcon, SearchTagIcon, UserIcon } from './Icons'
@@ -101,6 +101,15 @@ export function Shell() {
         if (!getNotifPrefs().events) return
         const event = env.payload as AppEvent
         toast(`Starting soon: ${event.title}`, { actionLabel: 'View', actionTo: `/events/${event.id}` })
+      }),
+      // A club you follow posted to its feed.
+      ws.on('clubpost.new', (env) => {
+        if (!getNotifPrefs().announcements) return
+        const post = env.payload as ClubPost
+        toast(`${post.club_name} posted an update`, {
+          actionLabel: 'View',
+          actionTo: `/clubs/${post.club_id}`,
+        })
       }),
       // Someone posted an item that may match yours (opposite lost/found type).
       ws.on('lostfound.match', (env) => {
