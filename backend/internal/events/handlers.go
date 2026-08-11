@@ -3,6 +3,7 @@ package events
 import (
 	"context"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,15 +32,16 @@ func errJSON(c *fiber.Ctx, status int, msg string) error {
 
 const selectEvent = `
 	SELECT e.id::text, e.title, e.description, e.banner_url, e.venue, e.start_time,
-	       e.club_id::text, c.name, e.created_at,
+	       e.club_id::text, c.name, e.price_cents, e.created_at,
 	       (SELECT COUNT(*) FROM event_rsvps r WHERE r.event_id=e.id AND r.status='going'),
-	       EXISTS(SELECT 1 FROM event_rsvps r WHERE r.event_id=e.id AND r.user_id=$1 AND r.status='going')
+	       EXISTS(SELECT 1 FROM event_rsvps r WHERE r.event_id=e.id AND r.user_id=$1 AND r.status='going'),
+	       (SELECT t.status FROM tickets t WHERE t.event_id=e.id AND t.user_id=$1 AND t.status IN ('paid','checked_in'))
 	FROM events e LEFT JOIN clubs c ON c.id=e.club_id`
 
 func scanEvent(row interface{ Scan(...any) error }) (*models.Event, error) {
 	var e models.Event
 	err := row.Scan(&e.ID, &e.Title, &e.Description, &e.BannerURL, &e.Venue, &e.StartTime,
-		&e.ClubID, &e.ClubName, &e.CreatedAt, &e.RSVPCount, &e.MyRSVP)
+		&e.ClubID, &e.ClubName, &e.PriceCents, &e.CreatedAt, &e.RSVPCount, &e.MyRSVP, &e.MyTicketStatus)
 	if err != nil {
 		return nil, err
 	}
@@ -58,9 +60,32 @@ func (h *Handler) Create(c *fiber.Ctx) error {
 	}
 	description := strings.TrimSpace(c.FormValue("description"))
 	venue := strings.TrimSpace(c.FormValue("venue"))
+	priceCents := 0
+	if v := c.FormValue("price_cents"); v != "" {
+		p, err := strconv.Atoi(v)
+		if err != nil || p < 0 || p > 10_000_000 {
+			return errJSON(c, 400, "price_cents must be a non-negative integer (max ₹1,00,000)")
+		}
+		// Razorpay's minimum order is 100 paise (₹1).
+		if p > 0 && p < 100 {
+			return errJSON(c, 400, "ticket price must be at least ₹1 (100 paise) or free")
+		}
+		priceCents = p
+	}
 	var clubID *string
 	if v := c.FormValue("club_id"); v != "" {
 		clubID = &v
+	}
+
+	// Club accounts always create events under their own club.
+	userID := c.Locals("userID").(string)
+	if c.Locals("role").(string) == "club_admin" {
+		var myClub string
+		if err := h.DB.QueryRow(c.Context(),
+			`SELECT id::text FROM clubs WHERE admin_id=$1`, userID).Scan(&myClub); err != nil {
+			return errJSON(c, 403, "no club is assigned to your account — ask a super admin")
+		}
+		clubID = &myClub
 	}
 	var bannerURL *string
 	if file, err := c.FormFile("banner"); err == nil && file != nil {
@@ -74,13 +99,12 @@ func (h *Handler) Create(c *fiber.Ctx) error {
 		bannerURL = &url
 	}
 
-	userID := c.Locals("userID").(string)
 	ctx := c.Context()
 	var id string
 	err = h.DB.QueryRow(ctx,
-		`INSERT INTO events(title, description, banner_url, venue, start_time, created_by, club_id)
-		 VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id::text`,
-		title, description, bannerURL, venue, startTime, userID, clubID).Scan(&id)
+		`INSERT INTO events(title, description, banner_url, venue, start_time, created_by, club_id, price_cents)
+		 VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id::text`,
+		title, description, bannerURL, venue, startTime, userID, clubID, priceCents).Scan(&id)
 	if err != nil {
 		return errJSON(c, 500, "internal error")
 	}
@@ -104,11 +128,21 @@ func (h *Handler) Create(c *fiber.Ctx) error {
 func (h *Handler) list(c *fiber.Ctx, includePast bool) error {
 	userID := c.Locals("userID").(string)
 	q := selectEvent
+	var conds []string
+	args := []any{userID}
 	if !includePast {
-		q += ` WHERE e.start_time > now() - interval '6 hours'`
+		conds = append(conds, `e.start_time > now() - interval '6 hours'`)
+	}
+	// The admin list shows club accounts only their own club's events.
+	if includePast && c.Locals("role").(string) == "club_admin" {
+		conds = append(conds, `e.club_id = (SELECT id FROM clubs WHERE admin_id=$2)`)
+		args = append(args, userID)
+	}
+	if len(conds) > 0 {
+		q += ` WHERE ` + strings.Join(conds, " AND ")
 	}
 	q += ` ORDER BY e.start_time ASC LIMIT 100`
-	rows, err := h.DB.Query(c.Context(), q, userID)
+	rows, err := h.DB.Query(c.Context(), q, args...)
 	if err != nil {
 		return errJSON(c, 500, "internal error")
 	}
@@ -150,9 +184,12 @@ func (h *Handler) RSVP(c *fiber.Ctx) error {
 	userID := c.Locals("userID").(string)
 	ctx := c.Context()
 
-	var exists bool
-	if err := h.DB.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM events WHERE id=$1)`, id).Scan(&exists); err != nil || !exists {
+	var price int
+	if err := h.DB.QueryRow(ctx, `SELECT price_cents FROM events WHERE id=$1`, id).Scan(&price); err != nil {
 		return errJSON(c, 404, "event not found")
+	}
+	if price > 0 && req.Going {
+		return errJSON(c, 402, "this is a ticketed event — buy a ticket to attend")
 	}
 	if req.Going {
 		_, err := h.DB.Exec(ctx,

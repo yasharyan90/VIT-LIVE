@@ -60,9 +60,25 @@ export interface AppEvent {
   start_time: string
   club_id: string | null
   club_name: string | null
+  price_cents: number
+  my_ticket_status: 'paid' | 'checked_in' | null
   rsvp_count: number
   my_rsvp: boolean
   created_at: string
+}
+
+export interface Ticket {
+  id: string
+  event_id: string
+  code: string
+  amount_cents: number
+  status: 'pending' | 'paid' | 'checked_in'
+  created_at: string
+  checked_in_at: string | null
+  event_title: string
+  venue: string
+  start_time: string
+  attendee_name: string
 }
 
 export interface PollOption {

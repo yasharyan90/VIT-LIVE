@@ -19,6 +19,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/announcements', label: 'Announcements' },
   { to: '/emergency', label: '⚠ Emergency', superAdminOnly: true, emergency: true },
   { to: '/events', label: 'Events' },
+  { to: '/checkin', label: 'Check-in' },
   { to: '/academic', label: 'Academic Calendar', superAdminOnly: true },
   { to: '/polls', label: 'Polls' },
   { to: '/lostfound', label: 'Lost & Found' },

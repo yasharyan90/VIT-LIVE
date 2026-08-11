@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../lib/api'
 import { ws } from '../lib/ws'
 import { formatEventTime } from '../lib/time'
+import { formatPrice } from '../lib/payments'
 import { useToast } from '../lib/toast'
 import type { AcademicEvent, AppEvent } from '../lib/types'
 import { Chip, EmptyState, PageLoader, SubTabs } from '../components/ui'
@@ -352,20 +353,33 @@ export function EventsPage() {
                   <span className="text-sm text-muted">
                     {event.rsvp_count} going
                   </span>
-                  <motion.button
-                    type="button"
-                    onClick={() => void toggleRsvp(event)}
-                    aria-pressed={event.my_rsvp}
-                    whileTap={{ scale: 0.95 }}
-                    transition={spring}
-                    className={`min-h-11 rounded-xl px-5 text-sm font-semibold transition-colors ${
-                      event.my_rsvp
-                        ? 'border border-success/40 bg-success/10 text-success'
-                        : 'bg-primary text-black shadow-sm'
-                    }`}
-                  >
-                    {event.my_rsvp ? "✓ I'm going" : 'RSVP'}
-                  </motion.button>
+                  {event.price_cents > 0 ? (
+                    <Link
+                      to={`/events/${event.id}`}
+                      className={`flex min-h-11 items-center rounded-xl px-5 text-sm font-semibold transition-colors ${
+                        event.my_ticket_status
+                          ? 'border border-success/40 bg-success/10 text-success'
+                          : 'bg-primary text-black shadow-sm'
+                      }`}
+                    >
+                      {event.my_ticket_status ? '🎟 View ticket' : `🎟 ${formatPrice(event.price_cents)}`}
+                    </Link>
+                  ) : (
+                    <motion.button
+                      type="button"
+                      onClick={() => void toggleRsvp(event)}
+                      aria-pressed={event.my_rsvp}
+                      whileTap={{ scale: 0.95 }}
+                      transition={spring}
+                      className={`min-h-11 rounded-xl px-5 text-sm font-semibold transition-colors ${
+                        event.my_rsvp
+                          ? 'border border-success/40 bg-success/10 text-success'
+                          : 'bg-primary text-black shadow-sm'
+                      }`}
+                    >
+                      {event.my_rsvp ? "✓ I'm going" : 'RSVP'}
+                    </motion.button>
+                  )}
                 </div>
               </div>
             </MotionItem>

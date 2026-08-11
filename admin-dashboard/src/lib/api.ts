@@ -28,6 +28,10 @@ export function getStoredUser(): User | null {
   }
 }
 
+export function updateStoredUser(user: User) {
+  localStorage.setItem(USER_KEY, JSON.stringify(user))
+}
+
 export function storeSession(access: string, refresh: string, user?: User) {
   localStorage.setItem(ACCESS_KEY, access)
   localStorage.setItem(REFRESH_KEY, refresh)

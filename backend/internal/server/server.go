@@ -29,8 +29,10 @@ import (
 	"vitlive/internal/lostfound"
 	"vitlive/internal/mess"
 	"vitlive/internal/notifications"
+	"vitlive/internal/payments"
 	"vitlive/internal/polls"
 	"vitlive/internal/storage"
+	"vitlive/internal/tickets"
 	"vitlive/internal/ws"
 )
 
@@ -88,6 +90,13 @@ func New(cfg *config.Config, pool *pgxpool.Pool, rdb *redis.Client) (*Server, er
 	opsH := &adminops.Handler{DB: pool, RDB: rdb, Audit: auditor}
 	acadH := &academics.Handler{DB: pool, Audit: auditor}
 	messH := &mess.Handler{DB: pool, Audit: auditor}
+	rzp := payments.New(cfg.RazorpayKeyID, cfg.RazorpayKeySecret)
+	if rzp.Enabled() {
+		log.Printf("payments: razorpay configured (key %s)", cfg.RazorpayKeyID)
+	} else {
+		log.Printf("payments: razorpay not configured — mock gateway active")
+	}
+	tickH := &tickets.Handler{DB: pool, Audit: auditor, RZP: rzp}
 
 	app := fiber.New(fiber.Config{
 		BodyLimit:    10 << 20, // uploads up to ~10 MB request size
@@ -145,6 +154,9 @@ func New(cfg *config.Config, pool *pgxpool.Pool, rdb *redis.Client) (*Server, er
 	api.Get("/events", jwtMW, evH.List)
 	api.Get("/events/:id", jwtMW, evH.Get)
 	api.Post("/events/:id/rsvp", jwtMW, evH.RSVP)
+	api.Post("/events/:id/order", jwtMW, tickH.CreateOrder)
+	api.Post("/events/:id/confirm", jwtMW, tickH.Confirm)
+	api.Get("/me/tickets", jwtMW, tickH.MyTickets)
 
 	api.Get("/polls", jwtMW, pollH.List)
 	api.Get("/polls/:id", jwtMW, pollH.Get)
@@ -179,6 +191,12 @@ func New(cfg *config.Config, pool *pgxpool.Pool, rdb *redis.Client) (*Server, er
 	admin.Get("/users", superOnly, opsH.ListUsers)
 	admin.Patch("/users/:id/role", superOnly, opsH.UpdateRole)
 	admin.Post("/clubs", superOnly, clubH.AdminCreate)
+	admin.Patch("/clubs/:id/admin", superOnly, clubH.AssignAdmin)
+	// Ticket scanning & attendee lists: the event's own club account or a
+	// super admin — no other club, no other role.
+	clubOrSuper := auth.RequireRole("club_admin", "super_admin")
+	admin.Post("/tickets/checkin", clubOrSuper, tickH.Checkin)
+	admin.Get("/events/:id/attendees", clubOrSuper, tickH.Attendees)
 	admin.Get("/audit-logs", superOnly, auditor.List)
 	admin.Post("/academic-events", superOnly, acadH.Create)
 	admin.Delete("/academic-events/:id", superOnly, acadH.Delete)

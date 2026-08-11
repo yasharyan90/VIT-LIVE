@@ -24,6 +24,10 @@ type Config struct {
 
 	FCMServiceAccountJSON string // path to service-account file, or empty
 
+	// Razorpay for paid event tickets (mock gateway when unset).
+	RazorpayKeyID     string
+	RazorpayKeySecret string
+
 	// S3-compatible object storage for uploads (optional; local disk when unset).
 	S3Endpoint  string
 	S3Bucket    string
@@ -43,7 +47,31 @@ func env(key, def string) string {
 	return def
 }
 
+// loadDotEnv reads KEY=VALUE lines from ./.env (if present) into the process
+// environment. Real environment variables always win over the file.
+func loadDotEnv() {
+	raw, err := os.ReadFile(".env")
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(string(raw), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		key, value = strings.TrimSpace(key), strings.Trim(strings.TrimSpace(value), `"'`)
+		if key != "" && os.Getenv(key) == "" {
+			os.Setenv(key, value)
+		}
+	}
+}
+
 func Load() *Config {
+	loadDotEnv()
 	domains := strings.Split(env("ALLOWED_EMAIL_DOMAINS", "vitbhopal.ac.in,vitstudent.ac.in,vit.ac.in"), ",")
 	for i := range domains {
 		domains[i] = strings.ToLower(strings.TrimSpace(domains[i]))
@@ -63,6 +91,8 @@ func Load() *Config {
 		SMTPPass:              os.Getenv("SMTP_PASS"),
 		SMTPFrom:              env("SMTP_FROM", "VIT Live <no-reply@vitlive.app>"),
 		FCMServiceAccountJSON: os.Getenv("FCM_SERVICE_ACCOUNT_JSON"),
+		RazorpayKeyID:         os.Getenv("RAZORPAY_KEY_ID"),
+		RazorpayKeySecret:     os.Getenv("RAZORPAY_KEY_SECRET"),
 		S3Endpoint:            os.Getenv("S3_ENDPOINT"),
 		S3Bucket:              os.Getenv("S3_BUCKET"),
 		S3Region:              env("S3_REGION", "auto"),

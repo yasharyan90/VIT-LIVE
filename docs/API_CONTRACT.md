@@ -187,3 +187,25 @@ Uploads are stored on local disk by default, or any S3-compatible bucket when th
 `S3_*` env vars are set (see `backend/.env.example`). Web push activates when
 `FCM_SERVICE_ACCOUNT_JSON` (backend) and `VITE_FIREBASE_*`/`VITE_FCM_VAPID_KEY`
 (student app build) are configured.
+
+## Ticketing (feature drop 3, Aug 2026)
+
+Events gained `price_cents` (0 = free; set via the create form). Event objects
+include `my_ticket_status` (`paid` | `checked_in` | null) for the caller.
+RSVP on a paid event returns **402** — attendance is by ticket.
+
+| Method & path | Who | Notes |
+|---|---|---|
+| `POST /events/:id/order` | student+ | Start purchase. → `{mock, key_id, order_id, amount_cents, currency, event_title}`. `mock:true` when Razorpay isn't configured. |
+| `POST /events/:id/confirm` | student+ | Body: Razorpay checkout callback fields (`razorpay_order_id/payment_id/signature`), verified server-side via HMAC; empty body allowed in mock mode. → `{ticket}` (201). Idempotent. |
+| `GET /me/tickets` | student+ | Caller's paid tickets with event info. |
+| `POST /admin/tickets/checkin` | club_admin / dept_admin / super_admin | Body `{code}` (the QR contents). 200 grants entry; **409** already checked in; **402** unpaid; **403** for a club account scanning another club's event. |
+| `PATCH /admin/clubs/:id/admin` | super_admin | Body `{email}` — makes that verified user the club's account (promotes students to `club_admin`). Club accounts create events only under their own club and see only their club's events in the admin list. |
+
+Ticket object: `{id, event_id, code, amount_cents, status, created_at,
+checked_in_at, event_title, venue, start_time, attendee_name}`. The QR encodes
+`code` (an opaque 32-hex secret). A paid ticket also inserts an RSVP so
+`rsvp_count` doubles as tickets sold.
+
+Env: `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` — unset means mock gateway
+(instant success) for local dev.

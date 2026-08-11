@@ -141,6 +141,45 @@ func (h *Handler) Unfollow(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"club": club})
 }
 
+// PATCH /api/v1/admin/clubs/:id/admin {"email": "..."} — super admin hands a
+// club account to a user: sets clubs.admin_id and promotes students to
+// club_admin. That account can then create events for the club and check
+// tickets in at the door.
+func (h *Handler) AssignAdmin(c *fiber.Ctx) error {
+	var req struct {
+		Email string `json:"email"`
+	}
+	if err := c.BodyParser(&req); err != nil || strings.TrimSpace(req.Email) == "" {
+		return errJSON(c, 400, "email is required")
+	}
+	clubID := c.Params("id")
+	actorID := c.Locals("userID").(string)
+	ctx := c.Context()
+
+	var targetID, targetRole string
+	if err := h.DB.QueryRow(ctx,
+		`SELECT id::text, role FROM users WHERE college_email=$1 AND is_verified`,
+		strings.ToLower(strings.TrimSpace(req.Email))).Scan(&targetID, &targetRole); err != nil {
+		return errJSON(c, 404, "no verified user with that email")
+	}
+	ct, err := h.DB.Exec(ctx, `UPDATE clubs SET admin_id=$1 WHERE id=$2`, targetID, clubID)
+	if err != nil || ct.RowsAffected() == 0 {
+		return errJSON(c, 404, "club not found")
+	}
+	// Promote students; never demote higher roles.
+	if targetRole == "student" {
+		h.DB.Exec(ctx, `UPDATE users SET role='club_admin' WHERE id=$1`, targetID)
+	}
+	h.Audit.Log(ctx, actorID, "club.assign_admin", clubID,
+		map[string]any{"admin_user_id": targetID, "email": req.Email})
+
+	club, err := h.loadClub(c, clubID, actorID)
+	if err != nil {
+		return errJSON(c, 500, "internal error")
+	}
+	return c.JSON(fiber.Map{"club": club, "admin_email": req.Email})
+}
+
 // POST /api/v1/admin/clubs (super_admin)
 func (h *Handler) AdminCreate(c *fiber.Ctx) error {
 	var req struct {

@@ -11,10 +11,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 
@@ -255,6 +257,146 @@ func TestAPI(t *testing.T) {
 			if it.(map[string]any)["title"] == "Future post" {
 				t.Fatal("scheduled announcement leaked into the student feed")
 			}
+		}
+	})
+
+	t.Run("paid event tickets: buy (mock), QR check-in once, club scoping", func(t *testing.T) {
+		// Super admin creates a club, assigns a club account, creates a paid
+		// event under it.
+		status, resp := e.call(t, "POST", "/api/v1/admin/clubs", adminToken, map[string]any{
+			"name": "Ticket Test Club", "description": "for ticket tests",
+		})
+		if status != 201 {
+			t.Fatalf("create club: %d (%v)", status, resp)
+		}
+		clubID := resp["club"].(map[string]any)["id"].(string)
+
+		clubAdminToken := e.signupStudent(t, "clubadmin1@vitstudent.ac.in")
+		if status, resp := e.call(t, "PATCH", "/api/v1/admin/clubs/"+clubID+"/admin", adminToken, map[string]any{
+			"email": "clubadmin1@vitstudent.ac.in",
+		}); status != 200 {
+			t.Fatalf("assign club admin: %d (%v)", status, resp)
+		}
+		// Re-login to pick up the promoted role in the JWT.
+		status, resp = e.call(t, "POST", "/api/v1/auth/login", "", map[string]any{
+			"college_email": "clubadmin1@vitstudent.ac.in", "password": "hunter2secret",
+		})
+		if status != 200 {
+			t.Fatalf("club admin re-login: %d", status)
+		}
+		clubAdminToken = resp["access_token"].(string)
+
+		// Club account creates its own paid event (multipart form).
+		var form bytes.Buffer
+		w := multipart.NewWriter(&form)
+		w.WriteField("title", "Paid Fest")
+		w.WriteField("description", "entry by ticket")
+		w.WriteField("venue", "Main Lawn")
+		w.WriteField("start_time", time.Now().Add(48*time.Hour).Format(time.RFC3339))
+		w.WriteField("price_cents", "15000") // ₹150
+		w.Close()
+		req, _ := http.NewRequest("POST", "/api/v1/admin/events", &form)
+		req.Header.Set("Content-Type", w.FormDataContentType())
+		req.Header.Set("Authorization", "Bearer "+clubAdminToken)
+		httpResp, err := e.srv.App.Test(req, 30_000)
+		if err != nil || httpResp.StatusCode != 201 {
+			t.Fatalf("club admin create paid event: %v status %d", err, httpResp.StatusCode)
+		}
+		var evResp map[string]any
+		json.NewDecoder(httpResp.Body).Decode(&evResp)
+		httpResp.Body.Close()
+		event := evResp["event"].(map[string]any)
+		eventID := event["id"].(string)
+		if event["club_id"] != clubID {
+			t.Fatalf("event not forced onto the club account's club: %v", event["club_id"])
+		}
+
+		// RSVP on a paid event is rejected.
+		if status, _ := e.call(t, "POST", "/api/v1/events/"+eventID+"/rsvp", studentToken, map[string]any{
+			"going": true,
+		}); status != 402 {
+			t.Fatalf("rsvp on paid event: expected 402, got %d", status)
+		}
+
+		// Buy via the mock gateway: order → confirm → ticket with a code.
+		status, order := e.call(t, "POST", "/api/v1/events/"+eventID+"/order", studentToken, map[string]any{})
+		if status != 200 || order["mock"] != true {
+			t.Fatalf("order: %d (%v)", status, order)
+		}
+		status, conf := e.call(t, "POST", "/api/v1/events/"+eventID+"/confirm", studentToken, map[string]any{})
+		if status != 201 {
+			t.Fatalf("confirm: %d (%v)", status, conf)
+		}
+		ticket := conf["ticket"].(map[string]any)
+		codeStr := ticket["code"].(string)
+		if len(codeStr) != 32 {
+			t.Fatalf("ticket code should be a 32-hex secret, got %q", codeStr)
+		}
+
+		// A second club's account cannot check this ticket in.
+		status, resp = e.call(t, "POST", "/api/v1/admin/clubs", adminToken, map[string]any{
+			"name": "Other Club", "description": "x",
+		})
+		if status != 201 {
+			t.Fatalf("create other club: %d", status)
+		}
+		otherClubID := resp["club"].(map[string]any)["id"].(string)
+		otherToken := e.signupStudent(t, "clubadmin2@vitstudent.ac.in")
+		e.call(t, "PATCH", "/api/v1/admin/clubs/"+otherClubID+"/admin", adminToken, map[string]any{
+			"email": "clubadmin2@vitstudent.ac.in",
+		})
+		status, resp = e.call(t, "POST", "/api/v1/auth/login", "", map[string]any{
+			"college_email": "clubadmin2@vitstudent.ac.in", "password": "hunter2secret",
+		})
+		otherToken = resp["access_token"].(string)
+		if status, _ := e.call(t, "POST", "/api/v1/admin/tickets/checkin", otherToken, map[string]any{
+			"code": codeStr,
+		}); status != 403 {
+			t.Fatalf("other club check-in: expected 403, got %d", status)
+		}
+
+		// The right club account grants entry — exactly once.
+		status, resp = e.call(t, "POST", "/api/v1/admin/tickets/checkin", clubAdminToken, map[string]any{
+			"code": codeStr,
+		})
+		if status != 200 || resp["ticket"].(map[string]any)["status"] != "checked_in" {
+			t.Fatalf("check-in: %d (%v)", status, resp)
+		}
+		if status, _ := e.call(t, "POST", "/api/v1/admin/tickets/checkin", clubAdminToken, map[string]any{
+			"code": codeStr,
+		}); status != 409 {
+			t.Fatalf("re-scan: expected 409, got %d", status)
+		}
+
+		// Students cannot hit the check-in endpoint at all.
+		if status, _ := e.call(t, "POST", "/api/v1/admin/tickets/checkin", studentToken, map[string]any{
+			"code": codeStr,
+		}); status != 403 {
+			t.Fatalf("student check-in: expected 403, got %d", status)
+		}
+
+		// Attendee list: own club account and super admin see it; another
+		// club's account and students do not.
+		attendeesPath := "/api/v1/admin/events/" + eventID + "/attendees"
+		status, resp = e.call(t, "GET", attendeesPath, clubAdminToken, nil)
+		if status != 200 {
+			t.Fatalf("attendees as own club: %d (%v)", status, resp)
+		}
+		if resp["checked_in"].(float64) != 1 || resp["paid"].(float64) != 1 {
+			t.Fatalf("attendee counts wrong: %v", resp)
+		}
+		first := resp["items"].([]any)[0].(map[string]any)
+		if first["status"] != "checked_in" {
+			t.Fatalf("expected the checked-in attendee first: %v", first)
+		}
+		if status, _ := e.call(t, "GET", attendeesPath, adminToken, nil); status != 200 {
+			t.Errorf("attendees as super admin: expected 200, got %d", status)
+		}
+		if status, _ := e.call(t, "GET", attendeesPath, otherToken, nil); status != 403 {
+			t.Errorf("attendees as other club: expected 403, got %d", status)
+		}
+		if status, _ := e.call(t, "GET", attendeesPath, studentToken, nil); status != 403 {
+			t.Errorf("attendees as student: expected 403, got %d", status)
 		}
 	})
 

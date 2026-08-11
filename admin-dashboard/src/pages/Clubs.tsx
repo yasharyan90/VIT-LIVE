@@ -17,6 +17,26 @@ export default function Clubs() {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [creating, setCreating] = useState(false)
+  const [adminDrafts, setAdminDrafts] = useState<Record<string, string>>({})
+  const [assigningId, setAssigningId] = useState<string | null>(null)
+
+  const assignAdmin = async (club: Club) => {
+    const email = (adminDrafts[club.id] ?? '').trim()
+    if (!email || assigningId) return
+    setAssigningId(club.id)
+    try {
+      await api<{ club: Club; admin_email: string }>(`/admin/clubs/${club.id}/admin`, {
+        method: 'PATCH',
+        body: { email },
+      })
+      setAdminDrafts((prev) => ({ ...prev, [club.id]: '' }))
+      toast(`${email} now runs ${club.name} — they can create events and scan tickets`, 'success')
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to assign club admin', 'error')
+    } finally {
+      setAssigningId(null)
+    }
+  }
 
   useEffect(() => {
     api<{ items: Club[] }>('/clubs')
@@ -101,6 +121,31 @@ export default function Clubs() {
               </span>
             </div>
             <p className="mt-2 text-sm text-neutral-500 line-clamp-3">{club.description}</p>
+            {isSuperAdmin && (
+              <div className="mt-4 border-t border-white/10 pt-3">
+                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                  Club account
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    value={adminDrafts[club.id] ?? ''}
+                    onChange={(e) => setAdminDrafts((prev) => ({ ...prev, [club.id]: e.target.value }))}
+                    className={`${inputCls} text-sm`}
+                    placeholder="user@vitstudent.ac.in"
+                    aria-label={`Assign admin for ${club.name}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void assignAdmin(club)}
+                    disabled={!(adminDrafts[club.id] ?? '').trim() || assigningId === club.id}
+                    className="shrink-0 rounded-lg border border-white/15 px-3 text-xs font-semibold text-neutral-900 hover:bg-white/5 disabled:opacity-50 transition-colors"
+                  >
+                    {assigningId === club.id ? 'Assigning…' : 'Assign'}
+                  </button>
+                </div>
+              </div>
+            )}
           </Card>
         ))}
       </div>

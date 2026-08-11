@@ -130,7 +130,26 @@ Read this top-to-bottom to get up to speed on the whole project. Companion docs:
 - Dev niceties: OTPs returned in signup responses and logged; seeded super admin
   `admin@vit.ac.in` / `admin12345`; both Vite dev servers proxy `/api`, `/ws`, `/uploads` to :8080.
 
-## 10. Known gaps / deliberate deferrals
+## 10. Ticketing & club accounts (feature drop 3, Aug 2026)
+
+- **Paid events**: admins set a ticket price (paise, `events.price_cents`); free events keep
+  plain RSVPs, and RSVPing a paid event returns 402 — attendance is by ticket only.
+- **Razorpay, env-gated like everything else**: with `RAZORPAY_KEY_ID/SECRET` set the real
+  checkout opens and the callback signature is verified server-side
+  (`HMAC-SHA256(order_id|payment_id)`); unset = **mock gateway** where purchases succeed
+  instantly, so the whole buy → QR → check-in loop works locally with zero setup.
+- **Tickets**: one per (event, user); the QR encodes an opaque random 32-hex `code` — nothing
+  guessable, nothing decodable. A paid ticket also inserts an RSVP so `rsvp_count` doubles as
+  tickets sold. Purchase confirm is idempotent.
+- **Club accounts**: the super admin assigns any verified user as a club's account
+  (`PATCH /admin/clubs/:id/admin`, promotes students to `club_admin`). Club accounts log into
+  the same admin dashboard but are scoped: events they create are forced onto their club, the
+  admin event list shows only their club, and **check-in only accepts their own club's tickets**.
+- **Door check-in**: the dashboard's Check-in page scans QRs with the native `BarcodeDetector`
+  (camera) and falls back to typing the code printed under every QR. Granted exactly once —
+  a second scan returns 409 with who/when. Every check-in and purchase is audit-logged.
+
+## 11. Known gaps / deliberate deferrals
 
 - **Push needs credentials**: fully wired, but silent until Firebase env vars are provided.
 - **S3 likewise** — local disk until `S3_*` is set.

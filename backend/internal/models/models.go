@@ -64,17 +64,33 @@ type LostFoundItem struct {
 }
 
 type Event struct {
-	ID          string    `json:"id"`
-	Title       string    `json:"title"`
-	Description string    `json:"description"`
-	BannerURL   *string   `json:"banner_url"`
-	Venue       string    `json:"venue"`
-	StartTime   time.Time `json:"start_time"`
-	ClubID      *string   `json:"club_id"`
-	ClubName    *string   `json:"club_name"`
-	RSVPCount   int       `json:"rsvp_count"`
-	MyRSVP      bool      `json:"my_rsvp"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID             string    `json:"id"`
+	Title          string    `json:"title"`
+	Description    string    `json:"description"`
+	BannerURL      *string   `json:"banner_url"`
+	Venue          string    `json:"venue"`
+	StartTime      time.Time `json:"start_time"`
+	ClubID         *string   `json:"club_id"`
+	ClubName       *string   `json:"club_name"`
+	PriceCents     int       `json:"price_cents"`
+	MyTicketStatus *string   `json:"my_ticket_status"` // paid | checked_in | nil
+	RSVPCount      int       `json:"rsvp_count"`
+	MyRSVP         bool      `json:"my_rsvp"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+type Ticket struct {
+	ID           string     `json:"id"`
+	EventID      string     `json:"event_id"`
+	Code         string     `json:"code"`
+	AmountCents  int        `json:"amount_cents"`
+	Status       string     `json:"status"`
+	CreatedAt    time.Time  `json:"created_at"`
+	CheckedInAt  *time.Time `json:"checked_in_at"`
+	EventTitle   string     `json:"event_title"`
+	Venue        string     `json:"venue"`
+	StartTime    time.Time  `json:"start_time"`
+	AttendeeName string     `json:"attendee_name"`
 }
 
 type PollOption struct {
