@@ -91,7 +91,7 @@ function AcademicCalendar() {
 
   return (
     <div className="mt-3">
-      <div className="rounded-2xl border border-white/10 bg-soft/60 p-3">
+      <div className="rounded-2xl glass p-3">
         <div className="mb-2 flex items-center justify-between px-1">
           <h3 className="text-[15px] font-bold text-ink">{monthTitle}</h3>
           <div className="flex gap-1">
@@ -194,7 +194,7 @@ function AcademicCalendar() {
           {selectedEvents.map((e) => (
             <MotionItem
               key={e.id}
-              className="flex items-center gap-3 rounded-2xl border border-white/10 bg-soft/60 p-3"
+              className="flex items-center gap-3 rounded-2xl glass p-3"
             >
               <span className="text-xl grayscale" aria-hidden="true">
                 {KIND_META[e.kind].icon}
@@ -328,7 +328,7 @@ export function EventsPage() {
           {visible.map((event) => (
             <MotionItem
               key={event.id}
-              className={`overflow-hidden rounded-2xl border border-white/10 bg-soft/60 ${
+              className={`overflow-hidden rounded-2xl glass ${
                 freshIds.has(event.id) ? 'animate-slide-fade' : ''
               }`}
             >

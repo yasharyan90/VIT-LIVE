@@ -53,7 +53,7 @@ export function ClubPostCard({
   )
 
   return (
-    <article className="rounded-2xl border border-white/10 bg-soft/60 p-4">
+    <article className="rounded-2xl glass p-4">
       <header className="flex items-center gap-3">
         {linkClub ? <Link to={`/clubs/${post.club_id}`}>{avatar}</Link> : avatar}
         <div className="min-w-0 flex-1">

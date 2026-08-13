@@ -59,7 +59,7 @@ export default function Layout() {
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
-      <aside className="fixed inset-y-0 left-0 w-60 bg-black border-r border-white/10 text-white flex flex-col">
+      <aside className="glass-strong fixed inset-y-0 left-0 w-60 border-r border-white/10 text-white flex flex-col">
         <div className="px-5 py-5 border-b border-white/10">
           <div className="text-lg font-bold leading-tight">
             VIT<span className="text-white/50"> Live</span>
@@ -109,7 +109,7 @@ export default function Layout() {
       {/* Main column */}
       <div className="flex-1 ml-60 flex flex-col">
         {/* Topbar */}
-        <header className="sticky top-0 z-10 flex items-center justify-end gap-4 bg-black/60 backdrop-blur-xl border-b border-white/10 px-6 h-14">
+        <header className="glass-strong sticky top-0 z-10 flex items-center justify-end gap-4 border-b border-white/10 px-6 h-14">
           {user && (
             <div className="flex items-center gap-3">
               <span className="text-sm font-semibold text-neutral-900">{user.full_name}</span>

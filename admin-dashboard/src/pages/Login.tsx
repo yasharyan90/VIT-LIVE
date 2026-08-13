@@ -37,7 +37,7 @@ export default function Login() {
           <p className="text-sm text-neutral-500 mt-1">Sign in to the admin dashboard</p>
         </div>
 
-        <form onSubmit={onSubmit} className="rounded-xl bg-surface border border-white/10 p-6 space-y-4">
+        <form onSubmit={onSubmit} className="glass rounded-2xl p-6 space-y-4">
           {error && (
             <div className="rounded-lg bg-warning/10 border border-warning/30 px-3 py-2 text-sm text-warning font-medium">
               {error}

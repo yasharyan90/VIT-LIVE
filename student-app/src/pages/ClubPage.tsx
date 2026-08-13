@@ -109,7 +109,7 @@ export function ClubPage() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={spring}
-            className="rounded-2xl border border-white/10 bg-soft/60 p-4"
+            className="rounded-2xl glass p-4"
           >
             <div className="flex items-center gap-4">
               <span
@@ -172,7 +172,7 @@ export function ClubPage() {
                   <MotionItem key={e.id}>
                     <Link
                       to={`/events/${e.id}`}
-                      className="block rounded-2xl border border-white/10 bg-soft/60 p-3 active:bg-white/5"
+                      className="block rounded-2xl glass p-3 active:bg-white/5"
                     >
                       <p className="font-semibold text-ink">{e.title}</p>
                       <p className="mt-0.5 text-sm text-primary-light">🗓 {formatEventTime(e.start_time)}</p>
@@ -193,7 +193,7 @@ export function ClubPage() {
             ) : (
               <MotionList className="space-y-2">
                 {announcements.map((a) => (
-                  <MotionItem key={a.id} className="rounded-2xl border border-white/10 bg-soft/60 p-4">
+                  <MotionItem key={a.id} className="rounded-2xl glass p-4">
                     <div className="flex items-baseline justify-between gap-2">
                       <h4 className="font-semibold text-ink">{a.title}</h4>
                       <span className="shrink-0 text-xs text-muted">{relTime(a.created_at)}</span>

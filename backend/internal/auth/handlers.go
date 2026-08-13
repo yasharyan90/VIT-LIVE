@@ -19,6 +19,7 @@ import (
 	"vitlive/internal/config"
 	"vitlive/internal/models"
 	"vitlive/internal/notifications"
+	"vitlive/internal/storage"
 )
 
 const maxOTPAttempts = 5
@@ -28,6 +29,84 @@ type Handler struct {
 	RDB    *redis.Client
 	Cfg    *config.Config
 	Mailer *notifications.Mailer
+	Store  storage.Store
+}
+
+// PATCH /api/v1/me (multipart) — edit your own profile: name, bio, phone,
+// residence (hosteller block/room or day scholar) and avatar image.
+func (h *Handler) UpdateMe(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(string)
+	ctx := c.Context()
+
+	fullName := strings.TrimSpace(c.FormValue("full_name"))
+	if fullName == "" {
+		return errJSON(c, 400, "full_name is required")
+	}
+	if len(fullName) > 80 {
+		return errJSON(c, 400, "name must be under 80 characters")
+	}
+	bio := strings.TrimSpace(c.FormValue("bio"))
+	if len(bio) > 280 {
+		return errJSON(c, 400, "bio must be under 280 characters")
+	}
+	phone := strings.TrimSpace(c.FormValue("phone"))
+	if len(phone) > 20 {
+		return errJSON(c, 400, "phone must be under 20 characters")
+	}
+
+	var residence *string
+	hostelBlock, roomNumber := "", ""
+	switch v := c.FormValue("residence_type"); v {
+	case "hosteller":
+		residence = &v
+		hostelBlock = strings.TrimSpace(c.FormValue("hostel_block"))
+		roomNumber = strings.TrimSpace(c.FormValue("room_number"))
+		if len(hostelBlock) > 40 || len(roomNumber) > 20 {
+			return errJSON(c, 400, "hostel block / room is too long")
+		}
+	case "day_scholar":
+		residence = &v
+	case "":
+		// not specified — stays unset
+	default:
+		return errJSON(c, 400, "residence_type must be hosteller or day_scholar")
+	}
+
+	var avatarURL *string
+	if file, err := c.FormFile("avatar"); err == nil && file != nil {
+		url, err := storage.SaveImage(ctx, h.Store, file)
+		if err != nil {
+			if fe, ok := err.(*fiber.Error); ok {
+				return errJSON(c, fe.Code, fe.Message)
+			}
+			return errJSON(c, 500, "could not store avatar")
+		}
+		avatarURL = &url
+	}
+
+	if avatarURL != nil {
+		_, err := h.DB.Exec(ctx,
+			`UPDATE users SET full_name=$1, bio=$2, phone=$3, residence_type=$4,
+			        hostel_block=$5, room_number=$6, avatar_url=$7 WHERE id=$8`,
+			fullName, bio, phone, residence, hostelBlock, roomNumber, *avatarURL, userID)
+		if err != nil {
+			return errJSON(c, 500, "internal error")
+		}
+	} else {
+		_, err := h.DB.Exec(ctx,
+			`UPDATE users SET full_name=$1, bio=$2, phone=$3, residence_type=$4,
+			        hostel_block=$5, room_number=$6 WHERE id=$7`,
+			fullName, bio, phone, residence, hostelBlock, roomNumber, userID)
+		if err != nil {
+			return errJSON(c, 500, "internal error")
+		}
+	}
+
+	user, err := h.LoadUser(ctx, "id", userID)
+	if err != nil {
+		return errJSON(c, 500, "internal error")
+	}
+	return c.JSON(fiber.Map{"user": user})
 }
 
 func generateOTP() (string, error) {
@@ -50,7 +129,9 @@ func errJSON(c *fiber.Ctx, status int, msg string) error {
 // LoadUser fetches a user (by id or email) with department info joined.
 func (h *Handler) LoadUser(ctx context.Context, by, value string) (*models.User, error) {
 	q := `SELECT u.id::text, u.college_email, u.full_name, u.role, u.department_id::text,
-	             d.code, d.name, u.year_of_study, u.is_verified, u.created_at, u.password_hash
+	             d.code, d.name, u.year_of_study, u.is_verified, u.created_at,
+	             u.avatar_url, u.bio, u.phone, u.residence_type, u.hostel_block, u.room_number,
+	             u.password_hash
 	      FROM users u LEFT JOIN departments d ON d.id = u.department_id WHERE `
 	switch by {
 	case "id":
@@ -62,7 +143,9 @@ func (h *Handler) LoadUser(ctx context.Context, by, value string) (*models.User,
 	var passwordHash string
 	err := h.DB.QueryRow(ctx, q, value).Scan(
 		&u.ID, &u.CollegeEmail, &u.FullName, &u.Role, &u.DepartmentID,
-		&u.DepartmentCode, &u.DepartmentName, &u.YearOfStudy, &u.IsVerified, &u.CreatedAt, &passwordHash)
+		&u.DepartmentCode, &u.DepartmentName, &u.YearOfStudy, &u.IsVerified, &u.CreatedAt,
+		&u.AvatarURL, &u.Bio, &u.Phone, &u.ResidenceType, &u.HostelBlock, &u.RoomNumber,
+		&passwordHash)
 	if err != nil {
 		return nil, err
 	}

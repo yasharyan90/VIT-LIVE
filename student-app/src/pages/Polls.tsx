@@ -186,7 +186,7 @@ function VotingCard({
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-soft/60 p-4">
+    <div className="rounded-2xl glass p-4">
       <h4 className="text-[17px] font-semibold leading-snug text-ink">📊 {poll.question}</h4>
       <p className="mt-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[13px] leading-snug text-ink/70">
         🔒 Your vote is anonymous — admins cannot see who voted what.
@@ -246,7 +246,7 @@ function VotingCard({
 
 function ResultsCard({ poll, showThanks }: { poll: Poll; showThanks: boolean }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-soft/60 p-4">
+    <div className="rounded-2xl glass p-4">
       <div className="flex items-start justify-between gap-2">
         <h4 className="text-[17px] font-semibold leading-snug text-ink">📊 {poll.question}</h4>
         {poll.is_closed ? <Chip color="gray">Closed</Chip> : <Chip color="green">Live</Chip>}

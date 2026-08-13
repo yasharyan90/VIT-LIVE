@@ -1,17 +1,18 @@
 @import "tailwindcss";
 
 @theme {
-  /* Minimal black theme — the accent is white; red stays reserved for emergencies. */
+  /* Liquid-glass theme: translucent surfaces over an ambient dark gradient.
+     The accent stays white; red stays reserved for emergencies. */
   --color-primary: #fafafa;
   --color-primary-light: #d4d4d4;
   --color-emergency: #e5484d;
   --color-emergency-bg: #1d0f10;
   --color-success: #3ecf8e;
   --color-warning: #f5b944;
-  --color-ink: #f2f2f2;
-  --color-muted: #8a8a8a;
-  --color-soft: #1a1a1a;
-  --color-surface: #0d0d0d;
+  --color-ink: #f4f4f5;
+  --color-muted: #9b9ba3;
+  --color-soft: rgba(255, 255, 255, 0.07);
+  --color-surface: rgba(16, 16, 22, 0.6);
 
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
@@ -59,11 +60,87 @@ body,
 }
 
 body {
-  background: #000000;
+  background: #050508;
   color: var(--color-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   color-scheme: dark;
+}
+
+/* ---- Ambient light the glass refracts: two slow-drifting color fields ---- */
+
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  border-radius: 50%;
+  filter: blur(90px);
+  pointer-events: none;
+}
+
+body::before {
+  width: 60vmax;
+  height: 60vmax;
+  left: -18vmax;
+  top: -22vmax;
+  background: radial-gradient(circle, rgba(62, 207, 142, 0.16), transparent 65%);
+  animation: drift-a 28s ease-in-out infinite alternate;
+}
+
+body::after {
+  width: 55vmax;
+  height: 55vmax;
+  right: -20vmax;
+  bottom: -20vmax;
+  background: radial-gradient(circle, rgba(124, 92, 255, 0.15), transparent 65%);
+  animation: drift-b 34s ease-in-out infinite alternate;
+}
+
+@keyframes drift-a {
+  from {
+    transform: translate(0, 0) scale(1);
+  }
+  to {
+    transform: translate(14vmax, 10vmax) scale(1.18);
+  }
+}
+
+@keyframes drift-b {
+  from {
+    transform: translate(0, 0) scale(1.1);
+  }
+  to {
+    transform: translate(-12vmax, -8vmax) scale(0.92);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before,
+  body::after {
+    animation: none;
+  }
+}
+
+/* ---- The glass materials ---- */
+
+/* Cards and floating panels: frosted, lit from the top edge. */
+.glass {
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03) 60%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 8px 28px rgba(0, 0, 0, 0.35);
+}
+
+/* Chrome (headers, nav bars, sidebars): darker, heavier blur, no border of
+   its own — pair with border-t/b/r utilities. */
+.glass-strong {
+  background: linear-gradient(180deg, rgba(13, 13, 19, 0.72), rgba(13, 13, 19, 0.55));
+  -webkit-backdrop-filter: blur(28px) saturate(170%);
+  backdrop-filter: blur(28px) saturate(170%);
 }
 
 ::selection {

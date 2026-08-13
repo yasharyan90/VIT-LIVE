@@ -113,7 +113,7 @@ export function LostFoundPage() {
               <button
                 type="button"
                 onClick={() => navigate(`/lostfound/${item.id}`, { state: { item } })}
-                className="flex w-full items-stretch gap-3 rounded-2xl border border-white/10 bg-soft/60 p-3 text-left active:bg-white/5"
+                className="flex w-full items-stretch gap-3 rounded-2xl glass p-3 text-left active:bg-white/5"
               >
                 {item.image_url ? (
                   <img

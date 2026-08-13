@@ -49,6 +49,41 @@ func (h *Handler) Stats(c *fiber.Ctx) error {
 	return c.JSON(stats)
 }
 
+// GET /api/v1/pulse — the campus heartbeat, visible to every student:
+// who's online right now, which club is buzzing this week, what's coming up.
+func (h *Handler) Pulse(c *fiber.Ctx) error {
+	ctx := c.Context()
+
+	online := 0
+	if n, err := h.RDB.Get(ctx, "stats:online").Int(); err == nil && n > 0 {
+		online = n
+	}
+
+	// Hottest club this week: posts + likes + fresh events + new followers.
+	var clubID, clubName string
+	var score int
+	err := h.DB.QueryRow(ctx,
+		`SELECT c.id::text, c.name,
+		   (SELECT COUNT(*) FROM club_posts p  WHERE p.club_id=c.id AND p.created_at > now()-interval '7 days') * 3 +
+		   (SELECT COUNT(*) FROM club_post_likes l JOIN club_posts p2 ON p2.id=l.post_id
+		     WHERE p2.club_id=c.id AND l.created_at > now()-interval '7 days') +
+		   (SELECT COUNT(*) FROM events e WHERE e.club_id=c.id AND e.created_at > now()-interval '7 days') * 3 +
+		   (SELECT COUNT(*) FROM club_members m WHERE m.club_id=c.id AND m.joined_at > now()-interval '7 days') * 2
+		   AS score
+		 FROM clubs c ORDER BY score DESC, c.name ASC LIMIT 1`).Scan(&clubID, &clubName, &score)
+
+	var eventsWeek int
+	h.DB.QueryRow(ctx,
+		`SELECT COUNT(*) FROM events WHERE start_time BETWEEN now() AND now()+interval '7 days'`).
+		Scan(&eventsWeek)
+
+	resp := fiber.Map{"online_now": online, "events_this_week": eventsWeek}
+	if err == nil && score > 0 {
+		resp["hot_club"] = fiber.Map{"id": clubID, "name": clubName, "score": score}
+	}
+	return c.JSON(resp)
+}
+
 // GET /api/v1/admin/analytics — data behind the dashboard charts.
 func (h *Handler) Analytics(c *fiber.Ctx) error {
 	ctx := c.Context()

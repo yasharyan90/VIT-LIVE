@@ -80,7 +80,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, rdb *redis.Client) (*Server, er
 	mailer := notifications.NewMailer(cfg)
 	fcm := notifications.NewFCM(pool, cfg.FCMServiceAccountJSON)
 
-	authH := &auth.Handler{DB: pool, RDB: rdb, Cfg: cfg, Mailer: mailer}
+	authH := &auth.Handler{DB: pool, RDB: rdb, Cfg: cfg, Mailer: mailer, Store: store}
 	annH := &announcements.Handler{DB: pool, RDB: rdb, Audit: auditor, FCM: fcm, Store: store}
 	emgH := &emergency.Handler{DB: pool, RDB: rdb, Audit: auditor, FCM: fcm, Gateway: gateway}
 	lfH := &lostfound.Handler{DB: pool, RDB: rdb, Audit: auditor, Store: store}
@@ -139,6 +139,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, rdb *redis.Client) (*Server, er
 	// Authenticated routes.
 	jwtMW := auth.JWTMiddleware(cfg.JWTSecret)
 	api.Get("/me", jwtMW, authH.Me)
+	api.Patch("/me", jwtMW, authH.UpdateMe)
 	api.Post("/me/device-token", jwtMW, authH.RegisterDeviceToken)
 
 	api.Get("/announcements", jwtMW, annH.List)
@@ -172,6 +173,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, rdb *redis.Client) (*Server, er
 
 	api.Get("/academic-events", jwtMW, acadH.List)
 	api.Get("/mess-menu", jwtMW, messH.Get)
+	api.Get("/pulse", jwtMW, opsH.Pulse)
 
 	// Admin routes.
 	adminRoles := auth.RequireRole(auth.AdminRoles...)

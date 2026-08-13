@@ -142,9 +142,9 @@ export function Shell() {
   )
 
   return (
-    <div className="min-h-dvh bg-black">
+    <div className="min-h-dvh">
       {/* Desktop sidebar (≥1024px) — phones keep the app-like bottom tabs */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-white/10 bg-black lg:flex">
+      <aside className="glass-strong fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-white/10 lg:flex">
         <div className="border-b border-white/10 px-5 py-5">
           <h1 className="text-xl font-bold tracking-tight text-ink">
             VIT<span className="text-muted"> Live</span>
@@ -190,8 +190,8 @@ export function Shell() {
       </aside>
 
       {/* Content column: phone-shaped on mobile, full-width beside the sidebar on desktop */}
-      <div className="mx-auto flex min-h-dvh w-full max-w-[480px] flex-col border-x border-white/5 bg-surface lg:ml-60 lg:w-auto lg:max-w-none lg:border-x-0">
-        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-white/10 bg-black/70 px-4 py-3 text-ink backdrop-blur-xl lg:hidden">
+      <div className="mx-auto flex min-h-dvh w-full max-w-[480px] flex-col lg:ml-60 lg:w-auto lg:max-w-none">
+        <header className="glass-strong sticky top-0 z-30 flex items-center justify-between border-b border-white/10 px-4 py-3 text-ink lg:hidden">
           <h1 className="text-xl font-bold tracking-tight">
             VIT<span className="text-muted"> Live</span>
           </h1>
@@ -220,7 +220,7 @@ export function Shell() {
         </main>
 
         <nav
-          className="fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-[480px] border-t border-white/10 bg-black/80 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden"
+          className="glass-strong fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-[480px] border-t border-white/10 pb-[env(safe-area-inset-bottom)] lg:hidden"
           aria-label="Main tabs"
         >
           <div className="flex">

@@ -13,6 +13,76 @@ import { ClubPostCard } from '../components/ClubPostCard'
 import { MotionItem, MotionList, spring } from '../components/motion'
 import { RefreshIcon } from '../components/Icons'
 
+/* ---------- Campus pulse: live heartbeat strip ---------- */
+
+interface Pulse {
+  online_now: number
+  events_this_week: number
+  hot_club?: { id: string; name: string; score: number }
+}
+
+function PulseBar() {
+  const [pulse, setPulse] = useState<Pulse | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const load = () =>
+      api<Pulse>('/pulse')
+        .then((data) => {
+          if (!cancelled) setPulse(data)
+        })
+        .catch(() => {
+          // decorative — feed works without it
+        })
+    load()
+    const t = window.setInterval(load, 30_000)
+    return () => {
+      cancelled = true
+      window.clearInterval(t)
+    }
+  }, [])
+
+  if (!pulse) return null
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={spring}
+      className="glass mb-3 flex items-center gap-2 overflow-x-auto rounded-full px-4 py-2.5 text-[13px] font-medium text-ink/85 [scrollbar-width:none]"
+      aria-label="Campus pulse"
+    >
+      <span className="flex shrink-0 items-center gap-1.5">
+        <span className="relative flex h-2 w-2" aria-hidden="true">
+          <motion.span
+            className="absolute inline-flex h-full w-full rounded-full bg-success"
+            animate={{ scale: [1, 2.4], opacity: [0.6, 0] }}
+            transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
+          />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
+        </span>
+        <strong className="font-bold text-ink">{pulse.online_now}</strong> online now
+      </span>
+      {pulse.hot_club && (
+        <>
+          <span className="shrink-0 text-white/20" aria-hidden="true">·</span>
+          <Link to={`/clubs/${pulse.hot_club.id}`} className="shrink-0 whitespace-nowrap">
+            🔥 <strong className="font-bold text-ink">{pulse.hot_club.name}</strong> is buzzing
+          </Link>
+        </>
+      )}
+      {pulse.events_this_week > 0 && (
+        <>
+          <span className="shrink-0 text-white/20" aria-hidden="true">·</span>
+          <span className="shrink-0 whitespace-nowrap">
+            🎉 <strong className="font-bold text-ink">{pulse.events_this_week}</strong> event
+            {pulse.events_this_week === 1 ? '' : 's'} this week
+          </span>
+        </>
+      )}
+    </motion.div>
+  )
+}
+
 /* ---------- Club social feed (posts from clubs you follow) ---------- */
 
 function ClubsFeed() {
@@ -124,7 +194,7 @@ function MessMenuCard() {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={spring}
-      className="mb-3 rounded-2xl border border-white/10 bg-soft/60"
+      className="mb-3 rounded-2xl glass"
       aria-label="Today's mess menu"
     >
       <button
@@ -323,6 +393,7 @@ export function FeedPage() {
         <ClubsFeed />
       ) : (
         <>
+      <PulseBar />
       <MessMenuCard />
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-lg font-bold text-ink">Campus Feed</h2>
@@ -358,7 +429,7 @@ export function FeedPage() {
             return (
               <MotionItem
                 key={a.id}
-                className={`rounded-2xl border border-white/10 bg-soft/60 p-4 ${
+                className={`rounded-2xl glass p-4 ${
                   freshIds.has(a.id) ? 'animate-slide-fade' : ''
                 }`}
               >
@@ -420,7 +491,7 @@ export function FeedPage() {
           type="button"
           onClick={() => void loadMore()}
           disabled={loadingMore}
-          className="mt-4 flex min-h-12 w-full items-center justify-center rounded-xl border border-white/10 bg-soft/60 font-semibold text-primary-light active:bg-soft"
+          className="mt-4 flex min-h-12 w-full items-center justify-center rounded-xl glass font-semibold text-primary-light active:bg-soft"
         >
           {loadingMore ? <Spinner className="h-5 w-5" /> : 'Load more'}
         </button>

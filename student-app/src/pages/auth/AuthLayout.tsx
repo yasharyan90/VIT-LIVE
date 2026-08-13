@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 
 export function AuthLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-[480px] flex-col border-x border-white/5 bg-black lg:justify-center lg:border-x-0 lg:py-10">
+    <div className="mx-auto flex min-h-dvh w-full max-w-[480px] flex-col lg:justify-center lg:py-10">
       <div className="flex flex-col items-center gap-1 px-6 pb-10 pt-16 text-ink lg:pt-0">
         <motion.span
           initial={{ opacity: 0, scale: 0.6 }}
@@ -35,7 +35,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: 'spring', stiffness: 300, damping: 30, delay: 0.1 }}
-        className="flex-1 rounded-t-3xl border-t border-white/10 bg-surface px-6 pb-10 pt-8 lg:flex-none lg:rounded-3xl lg:border lg:shadow-2xl lg:shadow-black/40"
+        className="glass flex-1 rounded-t-3xl px-6 pb-10 pt-8 lg:flex-none lg:rounded-3xl"
       >
         {children}
       </motion.div>

@@ -11,6 +11,12 @@ export interface User {
   year_of_study: number
   is_verified: boolean
   created_at: string
+  avatar_url: string | null
+  bio: string
+  phone: string
+  residence_type: 'hosteller' | 'day_scholar' | null
+  hostel_block: string
+  room_number: string
   followed_club_ids?: string[]
 }
 

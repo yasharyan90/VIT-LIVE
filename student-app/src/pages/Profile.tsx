@@ -1,16 +1,239 @@
 // Profile tab: identity card, My Clubs (follow/unfollow), local
 // notification preferences, logout.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { AnimatePresence, motion } from 'framer-motion'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useToast } from '../lib/toast'
 import { ws } from '../lib/ws'
 import { getNotifPrefs, setNotifPrefs, type NotifPrefs } from '../lib/prefs'
-import type { Club } from '../lib/types'
-import { PageLoader, EmptyState } from '../components/ui'
-import { MotionItem, MotionList } from '../components/motion'
+import type { Club, User } from '../lib/types'
+import { PageLoader, EmptyState, Spinner } from '../components/ui'
+import { MotionItem, MotionList, spring } from '../components/motion'
+
+const inputCls =
+  'min-h-12 w-full rounded-xl border border-white/15 bg-soft px-4 text-[15px] text-ink placeholder:text-muted focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/15'
+const labelCls = 'mb-1.5 block text-sm font-semibold text-ink'
+
+/* ---------- Inline profile editor (glass sheet inside the identity card) ---------- */
+
+function EditProfileForm({ user, onDone }: { user: User; onDone: () => void }) {
+  const { refreshUser } = useAuth()
+  const toast = useToast()
+  const [fullName, setFullName] = useState(user.full_name)
+  const [bio, setBio] = useState(user.bio)
+  const [phone, setPhone] = useState(user.phone)
+  const [residence, setResidence] = useState<'hosteller' | 'day_scholar' | ''>(user.residence_type ?? '')
+  const [block, setBlock] = useState(user.hostel_block)
+  const [room, setRoom] = useState(user.room_number)
+  const [avatar, setAvatar] = useState<File | null>(null)
+  const [preview, setPreview] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!avatar) {
+      setPreview(null)
+      return
+    }
+    const url = URL.createObjectURL(avatar)
+    setPreview(url)
+    return () => URL.revokeObjectURL(url)
+  }, [avatar])
+
+  const save = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!fullName.trim() || saving) return
+    setSaving(true)
+    try {
+      const fd = new FormData()
+      fd.append('full_name', fullName.trim())
+      fd.append('bio', bio.trim())
+      fd.append('phone', phone.trim())
+      if (residence) fd.append('residence_type', residence)
+      if (residence === 'hosteller') {
+        fd.append('hostel_block', block.trim())
+        fd.append('room_number', room.trim())
+      }
+      if (avatar) fd.append('avatar', avatar)
+      await api<{ user: User }>('/me', { method: 'PATCH', form: fd })
+      await refreshUser()
+      toast('Profile updated ✨', { kind: 'success' })
+      onDone()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Could not save profile', { kind: 'error' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const shownAvatar = preview ?? user.avatar_url
+
+  return (
+    <motion.form
+      onSubmit={save}
+      initial={{ height: 0, opacity: 0 }}
+      animate={{ height: 'auto', opacity: 1 }}
+      exit={{ height: 0, opacity: 0 }}
+      transition={{ duration: 0.22, ease: 'easeOut' }}
+      className="overflow-hidden"
+    >
+      <div className="mt-4 space-y-4 border-t border-white/10 pt-4">
+        {/* Avatar picker */}
+        <div className="flex items-center gap-4">
+          <label className="group relative cursor-pointer" aria-label="Change profile picture">
+            {shownAvatar ? (
+              <img
+                src={shownAvatar}
+                alt=""
+                className="h-20 w-20 rounded-full border border-white/20 object-cover"
+              />
+            ) : (
+              <span className="flex h-20 w-20 items-center justify-center rounded-full bg-white/10 text-3xl">
+                🙂
+              </span>
+            )}
+            <span className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm text-black shadow-lg">
+              📷
+            </span>
+            <input
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={(e) => setAvatar(e.target.files?.[0] ?? null)}
+            />
+          </label>
+          <p className="text-xs text-muted">
+            Tap the photo to change it.
+            <br />
+            JPG/PNG/WebP, up to 5 MB.
+          </p>
+        </div>
+
+        <div>
+          <label htmlFor="pf-name" className={labelCls}>
+            Full name
+          </label>
+          <input
+            id="pf-name"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            maxLength={80}
+            required
+            className={inputCls}
+          />
+        </div>
+
+        <div>
+          <label htmlFor="pf-bio" className={labelCls}>
+            Bio <span className="font-normal text-muted">({280 - bio.length} left)</span>
+          </label>
+          <textarea
+            id="pf-bio"
+            value={bio}
+            onChange={(e) => setBio(e.target.value.slice(0, 280))}
+            rows={3}
+            placeholder="A line about you — interests, what you're building, favourite club…"
+            className={`${inputCls} py-3`}
+          />
+        </div>
+
+        <div>
+          <label htmlFor="pf-phone" className={labelCls}>
+            Phone <span className="font-normal text-muted">(optional)</span>
+          </label>
+          <input
+            id="pf-phone"
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            maxLength={20}
+            placeholder="+91 …"
+            className={inputCls}
+          />
+        </div>
+
+        {/* Residence */}
+        <div>
+          <span className={labelCls}>I stay</span>
+          <div className="flex gap-2" role="radiogroup" aria-label="Residence type">
+            {(
+              [
+                ['hosteller', '🏠 Hostel'],
+                ['day_scholar', '🚌 Day Scholar'],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={residence === value}
+                onClick={() => setResidence((prev) => (prev === value ? '' : value))}
+                className={`min-h-11 flex-1 rounded-xl border text-sm font-semibold transition-colors ${
+                  residence === value
+                    ? 'border-primary/70 bg-white/10 text-ink'
+                    : 'border-white/15 text-muted active:bg-white/5'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <AnimatePresence initial={false}>
+          {residence === 'hosteller' && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              className="flex gap-3 overflow-hidden"
+            >
+              <div className="flex-1">
+                <label htmlFor="pf-block" className={labelCls}>
+                  Hostel block
+                </label>
+                <input
+                  id="pf-block"
+                  value={block}
+                  onChange={(e) => setBlock(e.target.value)}
+                  maxLength={40}
+                  placeholder="e.g. Block A"
+                  className={inputCls}
+                />
+              </div>
+              <div className="w-32">
+                <label htmlFor="pf-room" className={labelCls}>
+                  Room
+                </label>
+                <input
+                  id="pf-room"
+                  value={room}
+                  onChange={(e) => setRoom(e.target.value)}
+                  maxLength={20}
+                  placeholder="214"
+                  className={inputCls}
+                />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <motion.button
+          type="submit"
+          disabled={!fullName.trim() || saving}
+          whileTap={{ scale: 0.98 }}
+          transition={spring}
+          className="flex min-h-12 w-full items-center justify-center rounded-xl bg-primary font-semibold text-black shadow-sm disabled:opacity-60"
+        >
+          {saving ? <Spinner className="h-5 w-5 border-black/25 border-t-black" /> : 'Save profile'}
+        </motion.button>
+      </div>
+    </motion.form>
+  )
+}
 
 const ROLE_LABEL: Record<string, string> = {
   student: 'Student',
@@ -28,6 +251,7 @@ export function ProfilePage() {
   const [clubsLoading, setClubsLoading] = useState(true)
   const [busyClubs, setBusyClubs] = useState<Set<string>>(new Set())
   const [prefs, setPrefs] = useState<NotifPrefs>(getNotifPrefs)
+  const [editing, setEditing] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -102,29 +326,68 @@ export function ProfilePage() {
     <div className="px-4 py-4 pb-8">
       <h2 className="mb-3 text-lg font-bold text-ink">Profile</h2>
 
-      <section className="rounded-2xl border border-white/10 bg-soft/60 p-4">
+      <section className="rounded-2xl glass p-4">
         <div className="flex items-center gap-4">
-          <span
-            aria-hidden="true"
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-lg font-bold text-black"
-          >
-            {initials}
-          </span>
-          <div className="min-w-0">
+          {user.avatar_url ? (
+            <img
+              src={user.avatar_url}
+              alt=""
+              className="h-16 w-16 shrink-0 rounded-full border border-white/20 object-cover"
+            />
+          ) : (
+            <span
+              aria-hidden="true"
+              className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary text-lg font-bold text-black"
+            >
+              {initials}
+            </span>
+          )}
+          <div className="min-w-0 flex-1">
             <p className="truncate text-lg font-bold text-ink">{user.full_name}</p>
             <p className="truncate text-sm text-muted">{user.college_email}</p>
           </div>
+          <motion.button
+            type="button"
+            onClick={() => setEditing((v) => !v)}
+            whileTap={{ scale: 0.95 }}
+            transition={spring}
+            aria-expanded={editing}
+            className={`min-h-10 shrink-0 rounded-xl border px-3.5 text-sm font-semibold transition-colors ${
+              editing ? 'border-primary/60 bg-white/10 text-ink' : 'border-white/15 text-muted'
+            }`}
+          >
+            {editing ? 'Close' : '✏️ Edit'}
+          </motion.button>
         </div>
+
+        {user.bio && <p className="mt-3 text-sm leading-relaxed text-ink/80">{user.bio}</p>}
+
         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
           <span className="rounded-full border border-white/15 bg-white/10 px-2.5 py-0.5 text-[12px] font-semibold text-ink">
             {ROLE_LABEL[user.role] ?? user.role}
           </span>
+          {user.residence_type === 'hosteller' && (
+            <span className="rounded-full border border-success/40 bg-success/10 px-2.5 py-0.5 text-[12px] font-semibold text-success">
+              🏠 {user.hostel_block || 'Hosteller'}
+              {user.room_number ? ` · ${user.room_number}` : ''}
+            </span>
+          )}
+          {user.residence_type === 'day_scholar' && (
+            <span className="rounded-full border border-warning/40 bg-warning/10 px-2.5 py-0.5 text-[12px] font-semibold text-warning">
+              🚌 Day Scholar
+            </span>
+          )}
           {user.department_code && (
             <span className="text-muted">
               {user.department_name ?? user.department_code} · Year {user.year_of_study}
             </span>
           )}
         </div>
+        {user.phone && <p className="mt-2 text-sm text-muted">📞 {user.phone}</p>}
+
+        <AnimatePresence initial={false}>
+          {editing && <EditProfileForm user={user} onDone={() => setEditing(false)} />}
+        </AnimatePresence>
       </section>
 
       <section className="mt-5" aria-label="My clubs">
@@ -139,7 +402,7 @@ export function ProfilePage() {
               <MotionItem
                 key={club.id}
                 className={`flex items-center gap-3 rounded-2xl border p-3 ${
-                  club.is_following ? 'border-white/25 bg-white/5' : 'border-white/10 bg-soft/60'
+                  club.is_following ? 'border-white/25 bg-white/10' : 'border-white/10 bg-white/5'
                 }`}
               >
                 <Link to={`/clubs/${club.id}`} className="min-w-0 flex-1">
@@ -172,7 +435,7 @@ export function ProfilePage() {
         <h3 className="mb-2 text-sm font-bold uppercase tracking-wide text-muted">
           Notifications
         </h3>
-        <div className="divide-y divide-white/10 rounded-2xl border border-white/10 bg-soft/60">
+        <div className="divide-y divide-white/10 rounded-2xl glass">
           {(
             [
               ['announcements', 'Announcements'],

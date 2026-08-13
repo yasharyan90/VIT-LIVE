@@ -13,6 +13,12 @@ type User struct {
 	YearOfStudy     *int      `json:"year_of_study"`
 	IsVerified      bool      `json:"is_verified"`
 	CreatedAt       time.Time `json:"created_at"`
+	AvatarURL       *string   `json:"avatar_url"`
+	Bio             string    `json:"bio"`
+	Phone           string    `json:"phone"`
+	ResidenceType   *string   `json:"residence_type"` // hosteller | day_scholar | nil
+	HostelBlock     string    `json:"hostel_block"`
+	RoomNumber      string    `json:"room_number"`
 	FollowedClubIDs []string  `json:"followed_club_ids,omitempty"`
 }
 

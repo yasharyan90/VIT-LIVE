@@ -19,7 +19,7 @@ import { ProfilePage } from './pages/Profile'
 
 function Splash() {
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-[480px] flex-col items-center justify-center gap-3 border-x border-white/5 bg-black text-ink">
+    <div className="mx-auto flex min-h-dvh w-full max-w-[480px] flex-col items-center justify-center gap-3 text-ink">
       <motion.span
         initial={{ opacity: 0, scale: 0.6 }}
         animate={{ opacity: 1, scale: 1 }}

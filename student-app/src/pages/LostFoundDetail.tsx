@@ -126,7 +126,7 @@ export function LostFoundDetailPage() {
 
         <p className="text-[15px] leading-relaxed text-ink/85">{item.description}</p>
 
-        <div className="rounded-xl border border-white/10 bg-soft p-3 text-sm text-ink/80">
+        <div className="rounded-xl glass p-3 text-sm text-ink/80">
           <p>
             📍 <span className="font-medium">{item.location}</span>
           </p>

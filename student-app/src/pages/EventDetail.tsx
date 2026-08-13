@@ -107,7 +107,7 @@ export function EventDetailPage() {
           )}
           <div className="space-y-3 px-4 pt-4">
             <h3 className="text-xl font-bold text-ink">{event.title}</h3>
-            <div className="rounded-xl border border-white/10 bg-soft p-3 text-sm text-ink/80">
+            <div className="rounded-xl glass p-3 text-sm text-ink/80">
               <p className="font-medium text-primary-light">🗓 {formatEventTime(event.start_time)}</p>
               <p className="mt-1">📍 {event.venue}</p>
               {event.club_name && <p className="mt-1">🏷 {event.club_name}</p>}
