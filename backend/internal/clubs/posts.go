@@ -18,7 +18,8 @@ var validPostKinds = map[string]bool{"announcement": true, "banner": true, "news
 const postCols = `p.id::text, p.club_id::text, c.name, p.kind, p.body, p.image_url,
 	COALESCE(u.full_name,''), p.created_at,
 	(SELECT COUNT(*) FROM club_post_likes l WHERE l.post_id=p.id),
-	EXISTS(SELECT 1 FROM club_post_likes l WHERE l.post_id=p.id AND l.user_id=$1)`
+	EXISTS(SELECT 1 FROM club_post_likes l WHERE l.post_id=p.id AND l.user_id=$1),
+	(SELECT COUNT(*) FROM club_post_comments cc WHERE cc.post_id=p.id)`
 
 const postFrom = ` FROM club_posts p JOIN clubs c ON c.id=p.club_id LEFT JOIN users u ON u.id=p.created_by `
 
@@ -31,7 +32,7 @@ func scanPosts(rows interface {
 	for rows.Next() {
 		var p models.ClubPost
 		if rows.Scan(&p.ID, &p.ClubID, &p.ClubName, &p.Kind, &p.Body, &p.ImageURL,
-			&p.AuthorName, &p.CreatedAt, &p.LikeCount, &p.MyLike) == nil {
+			&p.AuthorName, &p.CreatedAt, &p.LikeCount, &p.MyLike, &p.CommentCount) == nil {
 			items = append(items, p)
 		}
 	}
@@ -188,6 +189,106 @@ func (h *Handler) FollowedFeed(c *fiber.Ctx) error {
 		return errJSON(c, 500, "internal error")
 	}
 	return c.JSON(fiber.Map{"items": scanPosts(rows)})
+}
+
+// GET /api/v1/club-posts/:id/comments — a post's comments, oldest first.
+func (h *Handler) ListComments(c *fiber.Ctx) error {
+	rows, err := h.DB.Query(c.Context(),
+		`SELECT cc.id::text, cc.post_id::text, cc.user_id::text, u.full_name, u.avatar_url,
+		        cc.body, cc.created_at
+		 FROM club_post_comments cc JOIN users u ON u.id=cc.user_id
+		 WHERE cc.post_id=$1 ORDER BY cc.created_at ASC LIMIT 200`, c.Params("id"))
+	if err != nil {
+		return errJSON(c, 500, "internal error")
+	}
+	defer rows.Close()
+	items := []models.ClubPostComment{}
+	for rows.Next() {
+		var cm models.ClubPostComment
+		if rows.Scan(&cm.ID, &cm.PostID, &cm.UserID, &cm.UserName, &cm.AvatarURL,
+			&cm.Body, &cm.CreatedAt) == nil {
+			items = append(items, cm)
+		}
+	}
+	return c.JSON(fiber.Map{"items": items})
+}
+
+// POST /api/v1/club-posts/:id/comments {"body": "..."} — anyone can comment.
+func (h *Handler) CreateComment(c *fiber.Ctx) error {
+	var req struct {
+		Body string `json:"body"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return errJSON(c, 400, "invalid request body")
+	}
+	req.Body = strings.TrimSpace(req.Body)
+	if req.Body == "" {
+		return errJSON(c, 400, "comment is empty")
+	}
+	if len(req.Body) > 500 {
+		return errJSON(c, 400, "comment too long (max 500 characters)")
+	}
+	postID := c.Params("id")
+	userID := c.Locals("userID").(string)
+	ctx := c.Context()
+
+	var clubID string
+	if err := h.DB.QueryRow(ctx,
+		`SELECT club_id::text FROM club_posts WHERE id=$1`, postID).Scan(&clubID); err != nil {
+		return errJSON(c, 404, "post not found")
+	}
+
+	var cm models.ClubPostComment
+	cm.PostID, cm.UserID, cm.Body = postID, userID, req.Body
+	if err := h.DB.QueryRow(ctx,
+		`INSERT INTO club_post_comments(post_id, user_id, body)
+		 VALUES($1,$2,$3) RETURNING id::text, created_at`,
+		postID, userID, req.Body).Scan(&cm.ID, &cm.CreatedAt); err != nil {
+		return errJSON(c, 500, "internal error")
+	}
+	h.DB.QueryRow(ctx, `SELECT full_name, avatar_url FROM users WHERE id=$1`, userID).
+		Scan(&cm.UserName, &cm.AvatarURL)
+
+	var count int
+	h.DB.QueryRow(ctx, `SELECT COUNT(*) FROM club_post_comments WHERE post_id=$1`, postID).Scan(&count)
+	topic := "club:" + clubID
+	ws.Publish(ctx, h.RDB, topic, ws.NewEnvelope("clubpost.comment", topic,
+		fiber.Map{"post_id": postID, "comment_count": count, "comment": cm}))
+	return c.Status(201).JSON(fiber.Map{"comment": cm, "comment_count": count})
+}
+
+// DELETE /api/v1/club-posts/:id/comments/:commentID — the comment's author,
+// the club's account, or a super admin.
+func (h *Handler) DeleteComment(c *fiber.Ctx) error {
+	postID, commentID := c.Params("id"), c.Params("commentID")
+	userID := c.Locals("userID").(string)
+	role := c.Locals("role").(string)
+	ctx := c.Context()
+
+	var authorID, clubID string
+	if err := h.DB.QueryRow(ctx,
+		`SELECT cc.user_id::text, p.club_id::text
+		 FROM club_post_comments cc JOIN club_posts p ON p.id=cc.post_id
+		 WHERE cc.id=$1 AND cc.post_id=$2`, commentID, postID).Scan(&authorID, &clubID); err != nil {
+		return errJSON(c, 404, "comment not found")
+	}
+	allowed := authorID == userID || role == "super_admin"
+	if !allowed && role == "club_admin" {
+		var myClub *string
+		h.DB.QueryRow(ctx, `SELECT id::text FROM clubs WHERE admin_id=$1`, userID).Scan(&myClub)
+		allowed = myClub != nil && *myClub == clubID
+	}
+	if !allowed {
+		return errJSON(c, 403, "you can only delete your own comments")
+	}
+	h.DB.Exec(ctx, `DELETE FROM club_post_comments WHERE id=$1`, commentID)
+
+	var count int
+	h.DB.QueryRow(ctx, `SELECT COUNT(*) FROM club_post_comments WHERE post_id=$1`, postID).Scan(&count)
+	topic := "club:" + clubID
+	ws.Publish(ctx, h.RDB, topic, ws.NewEnvelope("clubpost.comment", topic,
+		fiber.Map{"post_id": postID, "comment_count": count}))
+	return c.JSON(fiber.Map{"message": "deleted", "comment_count": count})
 }
 
 // POST /api/v1/club-posts/:id/like — toggle the caller's like.

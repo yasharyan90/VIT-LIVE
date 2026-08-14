@@ -9,16 +9,18 @@ import { bumpLastSeen, getLastSeen, ws } from '../lib/ws'
 import { getNotifPrefs } from '../lib/prefs'
 import { registerPush } from '../lib/pwa'
 import { useToast } from '../lib/toast'
-import type { Announcement, AppEvent, ClubPost, LostFoundItem, Poll } from '../lib/types'
+import type { Announcement, AppEvent, ChatMessage, ClubPost, LostFoundItem, Poll } from '../lib/types'
+import { useAuth } from '../lib/auth'
 import { EmergencyOverlay } from './EmergencyOverlay'
 import { spring } from './motion'
-import { CalendarIcon, ChartIcon, HomeIcon, SearchTagIcon, UserIcon } from './Icons'
+import { CalendarIcon, ChartIcon, ChatIcon, HomeIcon, SearchTagIcon, UserIcon } from './Icons'
 
 const TABS = [
   { to: '/', label: 'Feed', icon: HomeIcon, end: true },
-  { to: '/lostfound', label: 'Lost & Found', icon: SearchTagIcon, end: false },
+  { to: '/lostfound', label: 'Lost', icon: SearchTagIcon, end: false },
   { to: '/events', label: 'Events', icon: CalendarIcon, end: false },
   { to: '/polls', label: 'Polls', icon: ChartIcon, end: false },
+  { to: '/chats', label: 'Chats', icon: ChatIcon, end: false },
   { to: '/profile', label: 'Profile', icon: UserIcon, end: false },
 ]
 
@@ -33,7 +35,32 @@ export function Shell() {
   const toast = useToast()
   const location = useLocation()
   const outlet = useOutlet()
+  const { user } = useAuth()
   const [connected, setConnected] = useState(ws.connected)
+  const [unreadChats, setUnreadChats] = useState(0)
+
+  // Unread chat badge: server truth on every route change + on live messages.
+  useEffect(() => {
+    api<{ count: number }>('/chat/unread')
+      .then((d) => setUnreadChats(d.count))
+      .catch(() => {})
+  }, [location.pathname])
+
+  useEffect(() => {
+    return ws.on('chat.message', (env) => {
+      const m = env.payload as ChatMessage
+      if (!m || m.sender_id === user?.id) return
+      api<{ count: number }>('/chat/unread')
+        .then((d) => setUnreadChats(d.count))
+        .catch(() => {})
+      if (location.pathname !== `/chats/${m.sender_id}`) {
+        toast(`💬 ${m.sender_name || 'New message'}: ${m.body.slice(0, 60)}`, {
+          actionLabel: 'Reply',
+          actionTo: `/chats/${m.sender_id}`,
+        })
+      }
+    })
+  }, [user, location.pathname, toast])
 
   // WS lifecycle — single connection for the whole session.
   useEffect(() => {
@@ -173,7 +200,12 @@ export function Shell() {
                       aria-hidden="true"
                     />
                   )}
-                  <Icon className="relative h-5 w-5" />
+                  <span className="relative">
+                    <Icon className="h-5 w-5" />
+                    {to === '/chats' && unreadChats > 0 && (
+                      <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-emergency" aria-label={`${unreadChats} unread`} />
+                    )}
+                  </span>
                   <span className="relative">{label}</span>
                 </>
               )}
@@ -245,8 +277,11 @@ export function Shell() {
                         aria-hidden="true"
                       />
                     )}
-                    <motion.span whileTap={{ scale: 0.85 }} transition={spring}>
+                    <motion.span whileTap={{ scale: 0.85 }} transition={spring} className="relative">
                       <Icon className="h-6 w-6" />
+                      {to === '/chats' && unreadChats > 0 && (
+                        <span className="absolute -right-1 -top-0.5 h-2 w-2 rounded-full bg-emergency" aria-label={`${unreadChats} unread`} />
+                      )}
                     </motion.span>
                     <span>{label}</span>
                   </>

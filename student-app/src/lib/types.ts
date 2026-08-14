@@ -130,6 +130,47 @@ export interface ClubPost {
   created_at: string
   like_count: number
   my_like: boolean
+  comment_count: number
+}
+
+export interface ClubPostComment {
+  id: string
+  post_id: string
+  user_id: string
+  user_name: string
+  avatar_url: string | null
+  body: string
+  created_at: string
+}
+
+export interface ChatMessage {
+  id: string
+  sender_id: string
+  recipient_id: string
+  body: string
+  created_at: string
+  read_at: string | null
+  sender_name?: string
+}
+
+export interface ChatPerson {
+  id: string
+  full_name: string
+  college_email: string
+  avatar_url: string | null
+  bio?: string
+}
+
+export interface Conversation {
+  partner_id: string
+  full_name: string
+  college_email: string
+  avatar_url: string | null
+  last_body: string
+  last_at: string
+  last_from_me: boolean
+  unread: number
+  i_blocked: boolean
 }
 
 export interface AcademicEvent {

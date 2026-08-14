@@ -150,8 +150,19 @@ type ClubPost struct {
 	ImageURL   *string   `json:"image_url"`
 	AuthorName string    `json:"author_name"`
 	CreatedAt  time.Time `json:"created_at"`
-	LikeCount  int       `json:"like_count"`
-	MyLike     bool      `json:"my_like"`
+	LikeCount    int  `json:"like_count"`
+	MyLike       bool `json:"my_like"`
+	CommentCount int  `json:"comment_count"`
+}
+
+type ClubPostComment struct {
+	ID        string    `json:"id"`
+	PostID    string    `json:"post_id"`
+	UserID    string    `json:"user_id"`
+	UserName  string    `json:"user_name"`
+	AvatarURL *string   `json:"avatar_url"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type AuditLog struct {

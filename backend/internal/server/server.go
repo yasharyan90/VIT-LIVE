@@ -22,6 +22,7 @@ import (
 	"vitlive/internal/announcements"
 	"vitlive/internal/audit"
 	"vitlive/internal/auth"
+	"vitlive/internal/chat"
 	"vitlive/internal/clubs"
 	"vitlive/internal/config"
 	"vitlive/internal/emergency"
@@ -170,6 +171,19 @@ func New(cfg *config.Config, pool *pgxpool.Pool, rdb *redis.Client) (*Server, er
 	api.Get("/clubs/:id/posts", jwtMW, clubH.ListPosts)
 	api.Get("/feed/clubs", jwtMW, clubH.FollowedFeed)
 	api.Post("/club-posts/:id/like", jwtMW, clubH.LikePost)
+	api.Get("/club-posts/:id/comments", jwtMW, clubH.ListComments)
+	api.Post("/club-posts/:id/comments", jwtMW, clubH.CreateComment)
+	api.Delete("/club-posts/:id/comments/:commentID", jwtMW, clubH.DeleteComment)
+
+	// Student-to-student chat.
+	chatH := &chat.Handler{DB: pool, RDB: rdb}
+	api.Get("/chat/search", jwtMW, chatH.Search)
+	api.Get("/chat/conversations", jwtMW, chatH.Conversations)
+	api.Get("/chat/unread", jwtMW, chatH.Unread)
+	api.Get("/chat/with/:userID", jwtMW, chatH.Thread)
+	api.Post("/chat/with/:userID", jwtMW, chatH.Send)
+	api.Post("/chat/block/:userID", jwtMW, chatH.Block)
+	api.Post("/chat/unblock/:userID", jwtMW, chatH.Unblock)
 
 	api.Get("/academic-events", jwtMW, acadH.List)
 	api.Get("/mess-menu", jwtMW, messH.Get)

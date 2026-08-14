@@ -475,6 +475,120 @@ func TestAPI(t *testing.T) {
 		}
 	})
 
+	t.Run("chat: search by email, message, unread, block", func(t *testing.T) {
+		aliceToken := e.signupStudent(t, "alice.chat@vitstudent.ac.in")
+		bobToken := e.signupStudent(t, "bob.chat@vitstudent.ac.in")
+
+		// Bob finds Alice by email.
+		status, resp := e.call(t, "GET", "/api/v1/chat/search?q=alice.chat", bobToken, nil)
+		if status != 200 {
+			t.Fatalf("search: %d", status)
+		}
+		results := resp["items"].([]any)
+		if len(results) != 1 {
+			t.Fatalf("expected 1 search hit, got %d", len(results))
+		}
+		aliceID := results[0].(map[string]any)["id"].(string)
+
+		// Bob messages Alice; Alice has 1 unread until she opens the thread.
+		status, resp = e.call(t, "POST", "/api/v1/chat/with/"+aliceID, bobToken, map[string]any{
+			"body": "hey! did you find my earbuds?",
+		})
+		if status != 201 {
+			t.Fatalf("send: %d (%v)", status, resp)
+		}
+		_, unread := e.call(t, "GET", "/api/v1/chat/unread", aliceToken, nil)
+		if unread["count"].(float64) != 1 {
+			t.Fatalf("alice unread: expected 1, got %v", unread["count"])
+		}
+		var bobID string
+		_, convos := e.call(t, "GET", "/api/v1/chat/conversations", aliceToken, nil)
+		items := convos["items"].([]any)
+		if len(items) != 1 || items[0].(map[string]any)["unread"].(float64) != 1 {
+			t.Fatalf("alice conversations wrong: %v", convos)
+		}
+		bobID = items[0].(map[string]any)["partner_id"].(string)
+
+		// Opening the thread marks it read.
+		e.call(t, "GET", "/api/v1/chat/with/"+bobID, aliceToken, nil)
+		_, unread = e.call(t, "GET", "/api/v1/chat/unread", aliceToken, nil)
+		if unread["count"].(float64) != 0 {
+			t.Fatalf("unread after reading: expected 0, got %v", unread["count"])
+		}
+
+		// Alice blocks Bob: his sends get 403, hers get a friendly 400.
+		if status, _ := e.call(t, "POST", "/api/v1/chat/block/"+bobID, aliceToken, nil); status != 200 {
+			t.Fatalf("block: %d", status)
+		}
+		if status, _ := e.call(t, "POST", "/api/v1/chat/with/"+aliceID, bobToken, map[string]any{
+			"body": "hello?",
+		}); status != 403 {
+			t.Fatalf("blocked sender: expected 403, got %d", status)
+		}
+		if status, _ := e.call(t, "POST", "/api/v1/chat/with/"+bobID, aliceToken, map[string]any{
+			"body": "hi",
+		}); status != 400 {
+			t.Fatalf("blocker sending: expected 400, got %d", status)
+		}
+		// Unblock restores the conversation.
+		e.call(t, "POST", "/api/v1/chat/unblock/"+bobID, aliceToken, nil)
+		if status, _ := e.call(t, "POST", "/api/v1/chat/with/"+aliceID, bobToken, map[string]any{
+			"body": "phew",
+		}); status != 201 {
+			t.Fatalf("send after unblock: expected 201, got %d", status)
+		}
+	})
+
+	t.Run("comments on club posts", func(t *testing.T) {
+		status, resp := e.call(t, "POST", "/api/v1/admin/clubs", adminToken, map[string]any{
+			"name": "Comment Club", "description": "x",
+		})
+		if status != 201 {
+			t.Fatalf("create club: %d", status)
+		}
+		clubID := resp["club"].(map[string]any)["id"].(string)
+
+		var form bytes.Buffer
+		w := multipart.NewWriter(&form)
+		w.WriteField("club_id", clubID)
+		w.WriteField("kind", "news")
+		w.WriteField("body", "comment on this")
+		w.Close()
+		req, _ := http.NewRequest("POST", "/api/v1/admin/club-posts", &form)
+		req.Header.Set("Content-Type", w.FormDataContentType())
+		req.Header.Set("Authorization", "Bearer "+adminToken)
+		httpResp, err := e.srv.App.Test(req, 30_000)
+		if err != nil || httpResp.StatusCode != 201 {
+			t.Fatalf("post: %v %d", err, httpResp.StatusCode)
+		}
+		var postResp map[string]any
+		json.NewDecoder(httpResp.Body).Decode(&postResp)
+		httpResp.Body.Close()
+		postID := postResp["post"].(map[string]any)["id"].(string)
+
+		status, resp = e.call(t, "POST", "/api/v1/club-posts/"+postID+"/comments", studentToken, map[string]any{
+			"body": "let's go 🔥",
+		})
+		if status != 201 || resp["comment_count"].(float64) != 1 {
+			t.Fatalf("comment: %d (%v)", status, resp)
+		}
+		commentID := resp["comment"].(map[string]any)["id"].(string)
+
+		// Another student can't delete someone else's comment.
+		otherToken := e.signupStudent(t, "commenter2@vitstudent.ac.in")
+		if status, _ := e.call(t, "DELETE", "/api/v1/club-posts/"+postID+"/comments/"+commentID, otherToken, nil); status != 403 {
+			t.Fatalf("foreign delete: expected 403, got %d", status)
+		}
+		// The author can.
+		if status, _ := e.call(t, "DELETE", "/api/v1/club-posts/"+postID+"/comments/"+commentID, studentToken, nil); status != 200 {
+			t.Fatalf("own delete: expected 200, got %d", status)
+		}
+		_, list := e.call(t, "GET", "/api/v1/club-posts/"+postID+"/comments", studentToken, nil)
+		if len(list["items"].([]any)) != 0 {
+			t.Fatal("comment not deleted")
+		}
+	})
+
 	t.Run("reactions toggle", func(t *testing.T) {
 		status, resp := e.call(t, "POST", "/api/v1/admin/announcements", adminToken, map[string]any{
 			"title": "React to me", "body": "👍",

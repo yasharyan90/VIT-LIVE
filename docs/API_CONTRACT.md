@@ -230,3 +230,24 @@ created_at, like_count, my_like}`.
 WS envelopes on topic `club:<id>` (followers auto-subscribed):
 `clubpost.new` (ClubPost), `clubpost.like` (`{id, like_count}`),
 `clubpost.deleted` (`{id}`).
+
+## Chat + comments (Aug 2026)
+
+Student-to-student direct messages (find by email, block anyone) and comments
+on club posts.
+
+| Method & path | Notes |
+|---|---|
+| `GET /chat/search?q=` | Find verified users by email/name (min 2 chars, max 10 hits). |
+| `GET /chat/conversations` | Partners with last message, unread count, block state. |
+| `GET /chat/unread` | `{count}` — total unread (nav badge). |
+| `GET /chat/with/:userID` | Thread (last 100, oldest first) + partner + `i_blocked`. Marks incoming as read. |
+| `POST /chat/with/:userID` | `{body}` (≤2000). 400 if you blocked them, 403 if they blocked you. |
+| `POST /chat/block/:userID` / `POST /chat/unblock/:userID` | Toggle block. |
+| `GET /club-posts/:id/comments` | Oldest-first, ≤200. |
+| `POST /club-posts/:id/comments` | `{body}` (≤500) → `{comment, comment_count}` |
+| `DELETE /club-posts/:id/comments/:commentID` | Author, club account, or super admin. |
+
+WS: `chat.message` (Message) on both users' `user:<id>` topics;
+`clubpost.comment` (`{post_id, comment_count, comment?}`) on `club:<id>`.
+ClubPost objects now carry `comment_count`.

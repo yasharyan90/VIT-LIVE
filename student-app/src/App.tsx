@@ -15,6 +15,8 @@ import { EventDetailPage } from './pages/EventDetail'
 import { PollsPage } from './pages/Polls'
 import { PollDetailPage } from './pages/PollDetail'
 import { ClubPage } from './pages/ClubPage'
+import { ChatsPage } from './pages/Chats'
+import { ChatThreadPage } from './pages/ChatThread'
 import { ProfilePage } from './pages/Profile'
 
 function Splash() {
@@ -74,6 +76,8 @@ export default function App() {
               <Route path="polls" element={<PollsPage />} />
               <Route path="polls/:id" element={<PollDetailPage />} />
               <Route path="clubs/:id" element={<ClubPage />} />
+              <Route path="chats" element={<ChatsPage />} />
+              <Route path="chats/:userID" element={<ChatThreadPage />} />
               <Route path="profile" element={<ProfilePage />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
